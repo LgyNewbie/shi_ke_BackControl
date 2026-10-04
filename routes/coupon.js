@@ -59,9 +59,24 @@ router.post('/admin/templates', requireAdmin, (req, res) => {
   const { name, type, value, min_amount, valid_days, remark } = req.body;
   if (!name || !value) return res.status(400).json({ code: 400, message: '缺少 name 或 value' });
   const info = db.prepare(
-    `INSERT INTO coupon_templates (name, type, value, min_amount, valid_days, remark)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(name, type || 'fixed', value, min_amount || 0, valid_days || 30, remark || '');
+  `INSERT INTO coupon_templates (
+    name,
+    type,
+    value,
+    min_amount,
+    valid_days,
+    remark,
+    enabled
+  )
+  VALUES (?, ?, ?, ?, ?, ?, 1)`
+).run(
+  name,
+  type || 'fixed',
+  value,
+  min_amount || 0,
+  valid_days || 30,
+  remark || ''
+);
   res.json({ code: 0, data: { templateId: info.lastInsertRowid } });
 });
 
@@ -78,6 +93,12 @@ router.post('/admin/issue', requireAdmin, (req, res) => {
     return res.status(400).json({ code: 400, message: '缺少 templateId 或 userIds（数组）' });
   }
   const template = db.prepare('SELECT * FROM coupon_templates WHERE id = ?').get(templateId);
+if (template.enabled !== 1) {
+  return res.status(400).json({
+    code: 400,
+    message: '该优惠券模板已停用，无法发放'
+  });
+}
   if (!template) return res.status(404).json({ code: 404, message: '优惠券模板不存在' });
 
   const insert = db.prepare(
@@ -114,6 +135,12 @@ router.post('/admin/issue-all', requireAdmin, (req, res) => {
     const template = db.prepare(
       'SELECT * FROM coupon_templates WHERE id = ?'
     ).get(templateId);
+if (template.enabled !== 1) {
+  return res.status(400).json({
+    code: 400,
+    message: '该优惠券模板已停用，无法发放'
+  });
+}
 
     if (!template) {
       return res.status(404).json({

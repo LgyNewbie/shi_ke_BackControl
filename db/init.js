@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS coupon_templates (
   min_amount INTEGER NOT NULL DEFAULT 0, -- 使用门槛，订单满多少分才能用
   valid_days INTEGER NOT NULL DEFAULT 30, -- 发放后多少天内有效
   remark TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
@@ -157,6 +158,30 @@ function withTransaction(fn) {
     db.exec('ROLLBACK');
     throw err;
   }
+}
+// =========================
+// 数据库升级：优惠券模板增加启用状态
+// =========================
+
+try {
+  const couponColumns = db.prepare(
+    `PRAGMA table_info(coupon_templates)`
+  ).all();
+
+  const hasEnabled = couponColumns.some(
+    column => column.name === 'enabled'
+  );
+
+  if (!hasEnabled) {
+    db.prepare(`
+      ALTER TABLE coupon_templates
+      ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1
+    `).run();
+
+    console.log('数据库升级成功：coupon_templates 已增加 enabled 字段');
+  }
+} catch (error) {
+  console.error('优惠券模板数据库升级失败：', error);
 }
 
 module.exports = db;
