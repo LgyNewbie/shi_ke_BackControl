@@ -76,10 +76,42 @@ async function loadTemplates() {
       <td>¥${fenToYuan(t.min_amount)}</td>
       <td>${t.valid_days}天</td>
       <td>
-        <button onclick="issueCoupon(${t.id})">定向发放</button>
-        <button onclick="issueCouponToAll(${t.id})">发放给全部用户</button>
-        <button class="gray" onclick="viewRecords(${t.id}, '${t.name}')">查看发放记录</button>
-      </td>
+  <span style="
+    display:inline-block;
+    margin-right:8px;
+    color:${t.enabled === 1 ? '#2e7d32' : '#999'};
+    font-weight:600;
+  ">
+    ${t.enabled === 1 ? '启用中' : '已停用'}
+  </span>
+
+  <button
+    onclick="toggleCouponTemplate(${t.id}, ${t.enabled})"
+  >
+    ${t.enabled === 1 ? '停用' : '启用'}
+  </button>
+
+  <button
+    ${t.enabled !== 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}
+    onclick="issueCoupon(${t.id})"
+  >
+    定向发放
+  </button>
+
+  <button
+    ${t.enabled !== 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}
+    onclick="issueCouponToAll(${t.id})"
+  >
+    发放给全部用户
+  </button>
+
+  <button
+    class="gray"
+    onclick="viewRecords(${t.id}, '${t.name}')"
+  >
+    查看发放记录
+  </button>
+</td>
     </tr>
   `).join('') || '<tr><td colspan="6" style="color:#999;">暂无模板</td></tr>';
 }
@@ -98,7 +130,31 @@ async function createTemplate() {
   loadTemplates();
 }
 
+async function toggleCouponTemplate(templateId, enabled) {
+  const action = enabled === 1 ? '停用' : '启用';
 
+  const ok = confirm(
+    `确定要${action}这张优惠券吗？`
+  );
+
+  if (!ok) return;
+
+  try {
+    await api(`/api/coupons/admin/templates/${templateId}/toggle`, {
+      method: 'POST',
+      body: {
+        enabled: enabled === 1 ? 0 : 1
+      }
+    });
+
+    alert(`${action}成功`);
+
+    loadTemplates();
+
+  } catch (error) {
+    console.error('优惠券状态修改失败：', error);
+  }
+}
 
 async function issueCoupon(templateId) {
   // 先拉用户列表方便你看着挑ID

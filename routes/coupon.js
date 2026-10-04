@@ -256,4 +256,60 @@ router.get('/admin/templates/:templateId/records', requireAdmin, (req, res) => {
   res.json({ code: 0, data: list });
 });
 
+// 启用 / 停用优惠券模板
+router.post('/admin/templates/:id/toggle', requireAdmin, (req, res) => {
+  try {
+    const templateId = Number(req.params.id);
+    const { enabled } = req.body;
+
+    if (!templateId) {
+      return res.status(400).json({
+        code: 400,
+        message: '优惠券模板 ID 无效'
+      });
+    }
+
+    if (enabled !== 0 && enabled !== 1) {
+      return res.status(400).json({
+        code: 400,
+        message: 'enabled 必须是 0 或 1'
+      });
+    }
+
+    const template = db.prepare(
+      'SELECT * FROM coupon_templates WHERE id = ?'
+    ).get(templateId);
+
+    if (!template) {
+      return res.status(404).json({
+        code: 404,
+        message: '优惠券模板不存在'
+      });
+    }
+
+    db.prepare(`
+      UPDATE coupon_templates
+      SET enabled = ?
+      WHERE id = ?
+    `).run(enabled, templateId);
+
+    res.json({
+      code: 0,
+      message: enabled === 1 ? '优惠券已启用' : '优惠券已停用',
+      data: {
+        templateId,
+        enabled
+      }
+    });
+
+  } catch (error) {
+    console.error('优惠券启用/停用失败：', error);
+
+    res.status(500).json({
+      code: 500,
+      message: error.message || '服务器内部错误'
+    });
+  }
+});
+
 module.exports = router;
