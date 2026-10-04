@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>客户投诉</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <div id="loginBox" class="login-box">
+    <h2>管理后台登录</h2>
+    <input id="loginUsername" placeholder="用户名" value="admin">
+    <input id="loginPassword" placeholder="密码" type="password">
+    <button onclick="doLogin()">登录</button>
+    <p id="loginMsg" class="msg"></p>
+  </div>
+
+  <div id="mainBox" style="display:none;">
+    <header>
+      <h1>小程序运营后台</h1>
+      <div><span id="whoami"></span> <button class="ghost" onclick="logout()">退出登录</button></div>
+    </header>
+    <nav>
+      <a href="index.html">总览</a>
+      <a href="orders.html">订单管理</a>
+      <a href="coupons.html">优惠券</a>
+      <a href="complaints.html" class="active">客户投诉</a>
+      <a href="refunds.html">退款审核</a>
+      <a href="wallet.html">钱包/用户</a>
+    </nav>
+    <main>
+      <div class="section">
+        <div class="form-row">
+          <span>筛选状态：</span>
+          <select id="statusFilter" onchange="loadComplaints()">
+            <option value="">全部</option>
+            <option value="pending">待处理</option>
+            <option value="processing">处理中</option>
+            <option value="resolved">已解决</option>
+            <option value="rejected">已驳回</option>
+          </select>
+        </div>
+        <table>
+          <thead>
+  <tr>
+    <th>ID</th>
+    <th>用户</th>
+    <th>关联订单</th>
+    <th>类型</th>
+    <th>内容</th>
+    <th>投诉图片</th>
+    <th>状态</th>
+    <th>提交时间</th>
+    <th>操作</th>
+  </tr>
+</thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</div>
+<script src="app.js"></script>
+<script>
+async function loadComplaints() {
+  const status = document.getElementById('statusFilter').value;
+  const list = await api('/api/complaints/admin/list' + (status ? `?status=${status}` : ''));
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = list.map(c => `
+<tr>
+  <td>${c.id}</td>
+
+  <td>
+    ${c.nickname || c.dev_account}(#${c.user_id})
+  </td>
+
+  <td>
+    ${c.order_id || '-'}
+  </td>
+
+  <td>
+    ${c.type || '-'}
+  </td>
+
+  <td style="max-width:220px;">
+    ${c.content}
+  </td>
+
+  <!-- 投诉图片 -->
+  <td>
+    ${
+      Array.isArray(c.images) && c.images.length
+        ? `
+          <div class="complaint-images">
+            ${c.images.map((url, index) => `
+              <img
+                src="${url}"
+                class="complaint-thumb"
+                onclick="previewComplaintImage(${JSON.stringify(c.images)}, ${index})"
+                title="点击查看大图"
+              >
+            `).join('')}
+          </div>
+        `
+        : '<span style="color:#999;">无图片</span>'
+    }
+  </td>
+
+  <td>
+    ${badge(c.status)}
+  </td>
+
+  <td>
+    ${c.created_at}
+  </td>
+
+  <td>
+        ${c.status === 'pending' || c.status === 'processing' ? `
+          <button onclick="handleComplaint(${c.id}, 'processing')">标记处理中</button>
+          <button onclick="handleComplaint(${c.id}, 'resolved')">标记已解决</button>
+          <button class="danger" onclick="handleComplaint(${c.id}, 'rejected')">驳回</button>
+          <button class="gray" onclick="createRefundFromComplaint(${c.id}, ${c.user_id}, ${c.order_id || 'null'})">发起退款</button>
+        ` : '-'}
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="9" style="color:#999;">暂无投诉记录</td></tr>';
+}
+
+// =========================
+// 投诉图片预览
+// =========================
+
+function previewComplaintImage(images, index) {
+
+  if (!images || !images.length) {
+    return;
+  }
+
+  const url = images[index];
+
+  const win = window.open('', '_blank');
+
+  if (!win) {
+    alert('浏览器阻止了弹出窗口，请允许后台页面打开新窗口。');
+    return;
+  }
+
+  win.document.write(`
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+      <meta charset="UTF-8">
+      <title>投诉图片</title>
+      <style>
+        body {
+          margin: 0;
+          background: #111;
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: Arial, sans-serif;
+        }
+
+        img {
+          max-width: 95vw;
+          max-height: 95vh;
+          object-fit: contain;
+        }
+      </style>
+    </head>
+
+    <body>
+      <img src="${url}">
+    </body>
+    </html>
+  `);
+
+  win.document.close();
+}
+
+
+
+async function handleComplaint(id, status) {
+  const remark = prompt('处理备注（会展示给内部记录，不会直接发给用户）：') || '';
+  await api(`/api/complaints/admin/${id}/handle`, { method: 'POST', body: { status, handle_remark: remark } });
+  loadComplaints();
+}
+
+async function createRefundFromComplaint(complaintId, userId, orderId) {
+  const amountYuan = prompt('请输入退款金额（元）：');
+  if (!amountYuan) return;
+  const amount = Math.round(parseFloat(amountYuan) * 100);
+  if (!amount || amount <= 0) { alert('金额不合法'); return; }
+  const reason = prompt('退款原因：') || `投诉#${complaintId}处理`;
+  const data = await api('/api/refunds/admin/create', {
+    method: 'POST',
+    body: { userId, orderId, complaintId, amount, reason }
+  });
+  alert(`退款单已创建（#${data.refundId}），请到"退款审核"页面完成审核放款`);
+  loadComplaints();
+}
+
+initPage(loadComplaints);
+</script>
+</body>
+</html>

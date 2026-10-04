@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>优惠券管理</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <div id="loginBox" class="login-box">
+    <h2>管理后台登录</h2>
+    <input id="loginUsername" placeholder="用户名" value="admin">
+    <input id="loginPassword" placeholder="密码" type="password">
+    <button onclick="doLogin()">登录</button>
+    <p id="loginMsg" class="msg"></p>
+  </div>
+
+  <div id="mainBox" style="display:none;">
+    <header>
+      <h1>小程序运营后台</h1>
+      <div><span id="whoami"></span> <button class="ghost" onclick="logout()">退出登录</button></div>
+    </header>
+    <nav>
+      <a href="index.html">总览</a>
+      <a href="orders.html">订单管理</a>
+      <a href="coupons.html" class="active">优惠券</a>
+      <a href="complaints.html">客户投诉</a>
+      <a href="refunds.html">退款审核</a>
+      <a href="wallet.html">钱包/用户</a>
+    </nav>
+    <main>
+      <div class="section">
+        <h3>新建优惠券模板</h3>
+        <div class="form-row">
+          <input id="tplName" placeholder="券名称，如：新人满30减5">
+          <select id="tplType">
+            <option value="fixed">满减（固定金额）</option>
+          </select>
+          <input id="tplValue" placeholder="抵扣金额（元）" type="number" step="0.01">
+          <input id="tplMin" placeholder="使用门槛（元，可为0）" type="number" step="0.01">
+          <input id="tplDays" placeholder="领取后有效天数" type="number" value="30">
+          <button onclick="createTemplate()">创建</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>优惠券模板列表</h3>
+        <table>
+          <thead><tr><th>ID</th><th>名称</th><th>面额</th><th>门槛</th><th>有效天数</th><th>操作</th></tr></thead>
+          <tbody id="tplTableBody"></tbody>
+        </table>
+      </div>
+    
+      <div class="section">
+        <h3>发放记录 <span id="recordsTitle" style="font-weight:normal;color:#999;font-size:13px;"></span></h3>
+        <table>
+          <thead><tr><th>记录ID</th><th>用户</th><th>状态</th><th>领取时间</th><th>过期时间</th><th>操作</th></tr></thead>
+          <tbody id="recordsTableBody"><tr><td colspan="6" style="color:#999;">点击上方模板的"查看发放记录"</td></tr></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</div>
+<script src="app.js"></script>
+<script>
+let templates = [];
+async function loadTemplates() {
+  templates = await api('/api/coupons/admin/templates');
+  const tbody = document.getElementById('tplTableBody');
+  tbody.innerHTML = templates.map(t => `
+    <tr>
+      <td>${t.id}</td>
+      <td>${t.name}</td>
+      <td>¥${fenToYuan(t.value)}</td>
+      <td>¥${fenToYuan(t.min_amount)}</td>
+      <td>${t.valid_days}天</td>
+      <td>
+        <button onclick="issueCoupon(${t.id})">定向发放</button>
+        <button onclick="issueCouponToAll(${t.id})">发放给全部用户</button>
+        <button class="gray" onclick="viewRecords(${t.id}, '${t.name}')">查看发放记录</button>
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="6" style="color:#999;">暂无模板</td></tr>';
+}
+
+async function createTemplate() {
+  const name = document.getElementById('tplName').value.trim();
+  const type = document.getElementById('tplType').value;
+  const value = Math.round(parseFloat(document.getElementById('tplValue').value || '0') * 100);
+  const min_amount = Math.round(parseFloat(document.getElementById('tplMin').value || '0') * 100);
+  const valid_days = parseInt(document.getElementById('tplDays').value || '30', 10);
+  if (!name || !value) { alert('请填写名称和金额'); return; }
+  await api('/api/coupons/admin/templates', { method: 'POST', body: { name, type, value, min_amount, valid_days } });
+  document.getElementById('tplName').value = '';
+  document.getElementById('tplValue').value = '';
+  document.getElementById('tplMin').value = '';
+  loadTemplates();
+}
+
+
+
+async function issueCoupon(templateId) {
+  // 先拉用户列表方便你看着挑ID
+  const users = await api('/api/admin/users');
+  const preview = users.slice(0, 20).map(u => `${u.id}:${u.nickname || u.dev_account}`).join('\n');
+  const input = prompt(
+    `请输入要发放的用户ID，多个用逗号分隔，例如：1,2,3\n\n当前部分用户参考（ID:昵称）：\n${preview}`
+  );
+  if (!input) return;
+  const userIds = input.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+  if (userIds.length === 0) { alert('未识别到有效的用户ID'); return; }
+  const data = await api('/api/coupons/admin/issue', { method: 'POST', body: { templateId, userIds } });
+  alert(`发放完成，成功 ${data.issuedCount} 人`);
+}
+
+async function issueCouponToAll(templateId) {
+  const ok = confirm(
+    '确定要把这张优惠券发放给全部用户吗？\n\n' +
+    '每个用户都会获得一张新的优惠券。'
+  );
+
+  if (!ok) return;
+
+  try {
+    const data = await api('/api/coupons/admin/issue-all', {
+      method: 'POST',
+      body: {
+        templateId
+      }
+    });
+
+    alert(
+      `发放完成！\n\n` +
+      `成功发放：${data.issuedCount} 人\n` +
+      `跳过用户：${data.skippedCount || 0} 人`
+    );
+  } catch (error) {
+    console.error('全部用户发放失败：', error);
+  }
+}
+
+
+
+async function viewRecords(templateId, name) {
+  document.getElementById('recordsTitle').textContent = `—— ${name}`;
+  const list = await api(`/api/coupons/admin/templates/${templateId}/records`);
+  const tbody = document.getElementById('recordsTableBody');
+  tbody.innerHTML = list.map(r => `
+    <tr>
+      <td>${r.id}</td>
+      <td>${r.nickname || r.dev_account}(#${r.user_id})</td>
+      <td>${badge(r.status)}</td>
+      <td>${r.issued_at}</td>
+      <td>${r.expire_at}</td>
+      <td>${r.status === 'unused' ? `<button class="danger" onclick="revokeCoupon(${r.id})">回收</button>` : '-'}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="6" style="color:#999;">暂无发放记录</td></tr>';
+  window._lastTemplateId = templateId;
+  window._lastTemplateName = name;
+}
+
+async function revokeCoupon(userCouponId) {
+  const reason = prompt('回收原因（可选）：') || '';
+  await api(`/api/coupons/admin/${userCouponId}/revoke`, { method: 'POST', body: { reason } });
+  viewRecords(window._lastTemplateId, window._lastTemplateName);
+}
+
+initPage(loadTemplates);
+</script>
+</body>
+</html>

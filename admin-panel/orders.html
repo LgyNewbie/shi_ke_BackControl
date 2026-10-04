@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>订单管理</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.order-detail-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+.order-detail-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.order-detail-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 760px;
+  max-width: 90%;
+  max-height: 85vh;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.order-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.order-detail-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.order-detail-close {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #f3f3f3;
+  border-radius: 50%;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.order-detail-body {
+  padding: 24px;
+  max-height: calc(85vh - 80px);
+  overflow-y: auto;
+}
+
+.detail-section {
+  margin-bottom: 28px;
+}
+
+.detail-section h3 {
+  margin: 0 0 16px;
+  font-size: 17px;
+  color: #333;
+}
+
+.detail-row {
+  display: flex;
+  gap: 20px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f1f1;
+  line-height: 1.6;
+}
+
+.detail-label {
+  width: 90px;
+  flex-shrink: 0;
+  color: #888;
+}
+
+.complaint-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 6px;
+  padding: 0 6px;
+  background: #f0f0f0;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.complaint-detail-card {
+  padding: 16px;
+  margin-bottom: 16px;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 8px;
+}
+
+.complaint-content-row {
+  align-items: flex-start;
+}
+
+.complaint-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+  padding-left: 110px;
+}
+
+.complaint-image {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  cursor: pointer;
+}
+
+.complaint-image:hover {
+  opacity: 0.85;
+}
+
+.detail-empty {
+  padding: 30px;
+  text-align: center;
+  color: #999;
+  background: #fafafa;
+  border-radius: 8px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="app">
+
+  <!-- 登录框 -->
+  <div id="loginBox" class="login-box">
+    <h2>管理后台登录</h2>
+
+    <input
+      id="loginUsername"
+      placeholder="用户名"
+      value="admin"
+    >
+
+    <input
+      id="loginPassword"
+      placeholder="密码"
+      type="password"
+    >
+
+    <button onclick="doLogin()">登录</button>
+
+    <p id="loginMsg" class="msg"></p>
+  </div>
+
+
+  <!-- 登录后的主界面 -->
+  <div id="mainBox" style="display:none;">
+
+    <header>
+      <h1>小程序运营后台</h1>
+
+      <div>
+        <span id="whoami"></span>
+        <button class="ghost" onclick="logout()">退出登录</button>
+      </div>
+    </header>
+
+
+    <!-- 导航 -->
+    <nav>
+      <a href="index.html">总览</a>
+      <a href="orders.html" class="active">订单管理</a>
+      <a href="coupons.html">优惠券</a>
+      <a href="complaints.html">客户投诉</a>
+      <a href="refunds.html">退款审核</a>
+      <a href="wallet.html">钱包/用户</a>
+    </nav>
+
+
+    <main>
+
+      <h2>订单管理</h2>
+
+      <div class="section">
+
+        <h3>全部订单</h3>
+
+        <div style="margin-bottom:15px;">
+          <button onclick="loadOrders()">刷新订单</button>
+        </div>
+
+        <div style="overflow-x:auto;">
+
+          <table>
+
+            <thead>
+              <tr>
+                <th>订单号</th>
+                <th>用户</th>
+                <th>商品</th>
+                <th>金额</th>
+                <th>状态</th>
+                <th>创建时间</th>
+                <th>支付时间</th>
+		<th>操作</th>
+              </tr>
+            </thead>
+
+            <tbody id="orderList">
+
+              <tr>
+                <td colspan="7">
+                  正在加载订单...
+                </td>
+              </tr>
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+</div>
+
+
+<script src="app.js"></script>
+
+<script>
+
+function statusText(status) {
+
+  const map = {
+    pending: '待付款',
+    paid: '待接单',
+    accepted: '商家已接单',
+    cooking: '制作中',
+    delivery: '配送中',
+    ready: '待取餐',
+    completed: '已完成',
+    cancelled: '已取消',
+    refunded: '已退款'
+  };
+
+  return map[status] || status || '-';
+
+}
+
+
+function statusClass(status) {
+
+  const map = {
+    pending: 'pending',
+    paid: 'processing',
+    accepted: 'processing',
+    cooking: 'processing',
+    delivery: 'processing',
+    ready: 'processing',
+    completed: 'completed',
+    cancelled: 'rejected',
+    refunded: 'completed'
+  };
+
+  return map[status] || 'pending';
+
+}
+
+
+async function acceptOrder(orderId) {
+
+  if (!confirm(`确定要接收订单 #${orderId} 吗？`)) {
+    return;
+  }
+
+  try {
+
+    await api(`/api/admin/orders/${orderId}/accept`, {
+      method: 'POST'
+    });
+
+    alert('接单成功');
+
+    await loadOrders();
+
+  } catch (error) {
+
+    console.error('接单失败：', error);
+
+    alert(error.message || '接单失败，请查看控制台');
+
+  }
+
+}
+
+
+async function startCooking(orderId) {
+
+  if (!confirm(`确定要开始制作订单 #${orderId} 吗？`)) {
+    return;
+  }
+
+  try {
+
+    await api(`/api/admin/orders/${orderId}/cooking`, {
+      method: 'POST'
+    });
+
+    alert('已开始制作');
+
+    await loadOrders();
+
+  } catch (error) {
+
+    console.error('开始制作失败：', error);
+
+    alert(error.message || '开始制作失败，请查看控制台');
+
+  }
+
+}
+
+
+
+async function startDelivery(orderId) {
+
+  if (!confirm(`确定要让订单 #${orderId} 进入配送吗？`)) {
+    return;
+  }
+
+  try {
+
+    await api(`/api/admin/orders/${orderId}/delivery`, {
+      method: 'POST'
+    });
+
+    alert('订单已进入配送');
+
+    await loadOrders();
+
+  } catch (error) {
+
+    console.error('进入配送失败：', error);
+
+    alert(error.message || '进入配送失败，请查看控制台');
+
+  }
+
+}
+
+
+
+async function completeOrder(orderId) {
+
+  if (!confirm(`确定要完成订单 #${orderId} 吗？`)) {
+    return;
+  }
+
+  try {
+
+    await api(`/api/admin/orders/${orderId}/complete`, {
+      method: 'POST'
+    });
+
+    alert('订单已完成');
+
+    await loadOrders();
+
+  } catch (error) {
+
+    console.error('完成订单失败：', error);
+
+    alert(error.message || '完成订单失败，请查看控制台');
+
+  }
+
+}
+
+// =========================
+// 查看订单详情
+// =========================
+
+async function viewOrderDetail(orderId) {
+  try {
+    const data = await api(
+      `/api/admin/orders/${orderId}/detail`
+    );
+
+    console.log('订单详情：', data);
+
+    const order = data.order || {};
+    const complaints = data.complaints || [];
+
+    let complaintHtml = '';
+
+    if (complaints.length === 0) {
+      complaintHtml = `
+        <div class="detail-empty">
+          该订单暂无投诉记录
+        </div>
+      `;
+    } else {
+      complaintHtml = complaints.map(complaint => {
+
+        let imagesHtml = '';
+
+        if (complaint.images && complaint.images.length > 0) {
+          imagesHtml = `
+            <div class="complaint-images">
+              ${complaint.images.map(image => `
+                <img
+                  src="${image}"
+                  class="complaint-image"
+                  onclick="window.open('${image}', '_blank')"
+                >
+              `).join('')}
+            </div>
+          `;
+        }
+
+        return `
+          <div class="complaint-detail-card">
+
+            <div class="detail-row">
+              <span class="detail-label">投诉类型</span>
+              <span>${complaint.type || '-'}</span>
+            </div>
+
+            <div class="detail-row complaint-content-row">
+              <span class="detail-label">投诉内容</span>
+              <span>${complaint.content || '-'}</span>
+            </div>
+
+            ${imagesHtml}
+
+            <div class="detail-row">
+              <span class="detail-label">处理状态</span>
+              <span>${complaint.status || '-'}</span>
+            </div>
+
+            <div class="detail-row">
+              <span class="detail-label">处理人</span>
+              <span>${complaint.handler || '-'}</span>
+            </div>
+
+            <div class="detail-row">
+              <span class="detail-label">处理备注</span>
+              <span>${complaint.handle_remark || '-'}</span>
+            </div>
+
+            <div class="detail-row">
+              <span class="detail-label">投诉时间</span>
+              <span>${complaint.created_at || '-'}</span>
+            </div>
+
+          </div>
+        `;
+      }).join('');
+    }
+
+    const modal = document.createElement('div');
+
+    modal.className = 'order-detail-modal';
+
+    modal.innerHTML = `
+      <div class="order-detail-mask"></div>
+
+      <div class="order-detail-panel">
+
+        <div class="order-detail-header">
+          <h2>订单详情</h2>
+          <button
+            class="order-detail-close"
+            onclick="this.closest('.order-detail-modal').remove()"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="order-detail-body">
+
+          <div class="detail-section">
+            <h3>订单信息</h3>
+
+            <div class="detail-row">
+              <span class="detail-label">订单号</span>
+              <span>#${order.id || orderId}</span>
+            </div>
+
+            <div class="detail-row">
+              <span class="detail-label">用户昵称</span>
+              <span>${order.nickname || '-'}</span>
+            </div>
+
+            <div class="detail-row">
+              <span class="detail-label">用户账号</span>
+              <span>${order.dev_account || '-'}</span>
+            </div>
+
+            <div class="detail-row">
+              <span class="detail-label">商品</span>
+              <span>${order.title || '-'}</span>
+            </div>
+
+            <div class="detail-row">
+              <span class="detail-label">订单金额</span>
+              <span>
+                ¥${order.amount
+                  ? (Number(order.amount) / 100).toFixed(2)
+                  : '0.00'}
+              </span>
+            </div>
+
+            <div class="detail-row">
+              <span class="detail-label">订单状态</span>
+              <span>${order.status || '-'}</span>
+            </div>
+
+            <div class="detail-row">
+              <span class="detail-label">创建时间</span>
+              <span>${order.created_at || '-'}</span>
+            </div>
+
+          </div>
+
+          <div class="detail-section">
+
+            <h3>
+              投诉记录
+              <span class="complaint-count">
+                ${complaints.length}
+              </span>
+            </h3>
+
+            ${complaintHtml}
+
+          </div>
+
+        </div>
+
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+  } catch (error) {
+
+    console.error('订单详情加载失败：', error);
+
+    alert(
+      error.message || '订单详情加载失败，请查看控制台'
+    );
+  }
+}
+
+
+
+async function loadOrders() {
+
+  const tbody = document.getElementById('orderList');
+
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="8">正在加载订单...</td>
+    </tr>
+  `;
+  try {
+
+    const orders = await api('/api/admin/orders');
+
+    if (!orders || orders.length === 0) {
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8">目前还没有订单</td>
+        </tr>
+      `;
+
+      return;
+
+    }
+
+
+    tbody.innerHTML = orders.map(order => {
+
+      return `
+        <tr>
+
+          <td>#${order.id}</td>
+
+          <td>
+            ${order.nickname || '未知用户'}
+          </td>
+
+          <td>
+            ${order.title || '-'}
+          </td>
+
+          <td>
+            ¥${fenToYuan(order.amount)}
+          </td>
+
+          <td>
+            <span class="badge ${statusClass(order.status)}">
+              ${statusText(order.status)}
+            </span>
+          </td>
+
+          <td>
+            ${order.created_at || '-'}
+          </td>
+
+                    <td>
+            ${order.paid_at || '-'}
+          </td>
+
+<td>
+  <button
+    class="gray"
+    onclick="viewOrderDetail(${order.id})"
+  >
+    订单详情
+  </button>
+
+  ${
+    order.status === 'paid'
+      ? `<button onclick="acceptOrder(${order.id})">接单</button>`
+      : order.status === 'accepted'
+        ? `<button onclick="startCooking(${order.id})">开始制作</button>`
+        : order.status === 'cooking'
+          ? `<button onclick="startDelivery(${order.id})">进入配送</button>`
+          : order.status === 'delivery'
+            ? `<button onclick="completeOrder(${order.id})">完成订单</button>`
+            : ''
+  }
+</td>
+
+        </tr>
+      `;
+
+    }).join('');
+
+  } catch (error) {
+
+    console.error('订单加载失败：', error);
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8">
+          订单加载失败，请查看控制台
+        </td>
+      </tr>
+    `;
+
+  }
+
+}
+
+
+initPage(loadOrders);
+
+</script>
+
+</body>
+</html>

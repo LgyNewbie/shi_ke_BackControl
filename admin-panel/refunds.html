@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>退款审核</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <div id="loginBox" class="login-box">
+    <h2>管理后台登录</h2>
+    <input id="loginUsername" placeholder="用户名" value="admin">
+    <input id="loginPassword" placeholder="密码" type="password">
+    <button onclick="doLogin()">登录</button>
+    <p id="loginMsg" class="msg"></p>
+  </div>
+
+  <div id="mainBox" style="display:none;">
+    <header>
+      <h1>小程序运营后台</h1>
+      <div><span id="whoami"></span> <button class="ghost" onclick="logout()">退出登录</button></div>
+    </header>
+    <nav>
+      <a href="index.html">总览</a>
+      <a href="orders.html">订单管理</a>
+      <a href="coupons.html">优惠券</a>
+      <a href="complaints.html">客户投诉</a>
+      <a href="refunds.html" class="active">退款审核</a>
+      <a href="wallet.html">钱包/用户</a>
+    </nav>
+    <main>
+      <div class="section">
+        <div class="form-row">
+          <span>筛选状态：</span>
+          <select id="statusFilter" onchange="loadRefunds()">
+            <option value="pending_review">待审核</option>
+            <option value="">全部</option>
+            <option value="completed">已完成</option>
+            <option value="rejected">已拒绝</option>
+          </select>
+        </div>
+        <table>
+          <thead><tr><th>ID</th><th>用户</th><th>关联订单</th><th>关联投诉</th><th>金额</th><th>原因</th><th>状态</th><th>提交时间</th><th>操作</th></tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+      <p class="tip">审核通过后，金额会自动计入用户的站内钱包余额（因为目前还没有接入微信支付退款接口）。</p>
+    </main>
+  </div>
+</div>
+<script src="app.js"></script>
+<script>
+async function loadRefunds() {
+  const status = document.getElementById('statusFilter').value;
+  const list = await api('/api/refunds/admin/list' + (status ? `?status=${status}` : ''));
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = list.map(r => `
+    <tr>
+      <td>${r.id}</td>
+      <td>${r.nickname || r.dev_account}(#${r.user_id})</td>
+      <td>${r.order_id || '-'}</td>
+      <td>${r.complaint_id || '-'}</td>
+      <td>¥${fenToYuan(r.amount)}</td>
+      <td style="max-width:180px;">${r.reason || '-'}</td>
+      <td>${badge(r.status)}</td>
+      <td>${r.created_at}</td>
+      <td>
+        ${r.status === 'pending_review' ? `
+          <button onclick="review(${r.id}, 'approve')">通过并打款</button>
+          <button class="danger" onclick="review(${r.id}, 'reject')">拒绝</button>
+        ` : '-'}
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="9" style="color:#999;">暂无记录</td></tr>';
+}
+
+async function review(id, action) {
+  const remark = prompt(action === 'approve' ? '审核备注（可选）：' : '拒绝原因：') || '';
+  await api(`/api/refunds/admin/${id}/review`, { method: 'POST', body: { action, review_remark: remark } });
+  loadRefunds();
+}
+
+initPage(loadRefunds);
+</script>
+</body>
+</html>

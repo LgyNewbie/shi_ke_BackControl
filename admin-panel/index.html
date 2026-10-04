@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理后台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <!-- 登录框 -->
+  <div id="loginBox" class="login-box">
+    <h2>管理后台登录</h2>
+    <input id="loginUsername" placeholder="用户名" value="admin">
+    <input id="loginPassword" placeholder="密码" type="password">
+    <button onclick="doLogin()">登录</button>
+    <p id="loginMsg" class="msg"></p>
+  </div>
+
+  <!-- 登录后的主界面 -->
+  <div id="mainBox" style="display:none;">
+    <header>
+      <h1>小程序运营后台</h1>
+      <div>
+        <span id="whoami"></span>
+        <button class="ghost" onclick="logout()">退出登录</button>
+      </div>
+    </header>
+
+<nav>
+  <a href="index.html" class="active">总览</a>
+  <a href="orders.html">订单管理</a>
+  <a href="coupons.html">优惠券</a>
+  <a href="complaints.html">客户投诉</a>
+  <a href="refunds.html">退款审核</a>
+  <a href="wallet.html">钱包/用户</a>
+</nav>
+
+    <main>
+      <h2>数据总览</h2>
+      <div class="cards">
+        <div class="card"><div class="num" id="userCount">-</div><div class="label">注册用户数</div></div>
+        <div class="card warn"><div class="num" id="pendingComplaints">-</div><div class="label">待处理投诉</div></div>
+        <div class="card warn"><div class="num" id="pendingRefunds">-</div><div class="label">待审核退款</div></div>
+        <div class="card"><div class="num" id="totalBalance">-</div><div class="label">钱包总余额（元）</div></div>
+      </div>
+      <p class="tip">提示：这套后台是过渡方案，等你申请到个体工商户、接入微信支付后，"钱包退款"这条通道可以继续保留用于人工退款/补偿场景，正常交易走微信支付原生退款即可。</p>
+    </main>
+  </div>
+</div>
+<script src="app.js"></script>
+<script>
+async function loadDashboard() {
+  const data = await api('/api/admin/dashboard');
+  document.getElementById('userCount').textContent = data.userCount;
+  document.getElementById('pendingComplaints').textContent = data.pendingComplaints;
+  document.getElementById('pendingRefunds').textContent = data.pendingRefunds;
+  document.getElementById('totalBalance').textContent = (data.totalWalletBalance / 100).toFixed(2);
+}
+initPage(loadDashboard);
+</script>
+</body>
+</html>
