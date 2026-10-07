@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>菜品管理</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div id="app">
+
+  <!-- =========================
+       登录框
+  ========================== -->
+  <div id="loginBox" class="login-box">
+
+    <h2>管理后台登录</h2>
+
+    <input
+      id="loginUsername"
+      placeholder="用户名"
+      value="admin"
+    >
+
+    <input
+      id="loginPassword"
+      placeholder="密码"
+      type="password"
+    >
+
+    <button onclick="doLogin()">登录</button>
+
+    <p id="loginMsg" class="msg"></p>
+
+  </div>
+
+
+  <!-- =========================
+       主界面
+  ========================== -->
+  <div id="mainBox" style="display:none;">
+
+    <header>
+
+      <h1>小程序运营后台</h1>
+
+      <div>
+        <span id="whoami"></span>
+
+        <button
+          class="ghost"
+          onclick="logout()"
+        >
+          退出登录
+        </button>
+      </div>
+
+    </header>
+
+
+    <!-- =========================
+         左侧菜单
+    ========================== -->
+    <nav>
+
+      <a href="index.html">
+        📊 数据统计
+      </a>
+
+      <a href="foods.html" class="active">
+        🍜 菜品管理
+      </a>
+
+      <a href="categories.html">
+        📂 分类管理
+      </a>
+
+      <a href="orders.html">
+        📦 订单管理
+      </a>
+
+      <a href="users.html">
+        👥 用户管理
+      </a>
+
+      <a href="messages.html">
+        💬 留言管理
+      </a>
+
+      <a href="polls.html">
+        🗳️ 投票管理
+      </a>
+
+      <a href="notices.html">
+        📢 公告管理
+      </a>
+
+      <a href="comments.html">
+        ⭐ 评论管理
+      </a>
+
+      <a href="coupons.html">
+        🎫 优惠券管理
+      </a>
+
+      <a href="delivery.html">
+        🚚 配送地址/区域
+      </a>
+
+      <a href="wallet.html">
+        💰 钱包管理
+      </a>
+
+      <a href="refunds.html">
+        💸 退款审核
+      </a>
+
+      <a href="complaints.html">
+        📢 投诉管理
+      </a>
+
+      <a href="settings.html">
+        ⚙️ 系统设置
+      </a>
+
+    </nav>
+
+
+    <!-- =========================
+         页面内容
+    ========================== -->
+    <main>
+
+      <h2>菜品管理</h2>
+
+
+      <!-- =========================
+           新增菜品
+      ========================== -->
+
+      <div class="section">
+
+        <h3>新增菜品</h3>
+
+        <div class="form-row">
+
+          <input
+            id="foodName"
+            placeholder="菜品名称，例如：宫保鸡丁"
+          >
+
+          <input
+            id="foodPrice"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="价格（元）"
+          >
+
+          <select id="foodCategory">
+
+            <option value="">
+              选择分类
+            </option>
+
+          </select>
+
+          <input
+            id="foodSort"
+            type="number"
+            value="0"
+            placeholder="排序"
+          >
+
+<div class="form-row">
+
+  <input
+    id="foodImage"
+    placeholder="图片地址（可选）"
+    style="flex:1;"
+  >
+
+  <input
+    id="foodImageFile"
+    type="file"
+    accept="image/*"
+    style="flex:1;"
+  >
+
+  <button onclick="chooseImage()">
+    上传图片
+  </button>
+
+</div>
+
+<div class="form-row">
+
+  <div id="uploadPreview" style="display:none;">
+
+    <img
+      id="uploadPreviewImage"
+      src=""
+      style="
+        width:100px;
+        height:100px;
+        object-fit:cover;
+        border-radius:8px;
+        border:1px solid #ddd;
+      "
+    >
+
+  </div>
+
+  <span
+    id="uploadStatus"
+    style="color:#666;"
+  ></span>
+
+</div>
+
+
+        <div class="form-row">
+
+          <textarea
+            id="foodDescription"
+            placeholder="菜品描述（可选）"
+            style="width:100%;"
+          ></textarea>
+
+        </div>
+
+
+        <div class="form-row">
+
+          <button onclick="addFood()">
+            添加菜品
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- =========================
+           菜品列表
+      ========================== -->
+
+      <div class="section">
+
+        <h3>菜品列表</h3>
+
+        <table>
+
+          <thead>
+
+            <tr>
+
+              <th>ID</th>
+
+              <th>图片</th>
+
+              <th>菜品名称</th>
+
+              <th>分类</th>
+
+              <th>价格</th>
+
+              <th>描述</th>
+
+              <th>排序</th>
+
+              <th>状态</th>
+
+              <th>操作</th>
+
+            </tr>
+
+          </thead>
+
+          <tbody id="foodTableBody">
+
+            <tr>
+
+              <td colspan="9">
+                正在加载……
+              </td>
+
+            </tr>
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </main>
+
+  </div>
+
+</div>
+
+
+<script src="app.js"></script>
+
+
+<script>
+
+
+// ==================================================
+// 全局分类数据
+// ==================================================
+
+let categories = [];
+
+
+// ==================================================
+// 加载分类
+// ==================================================
+
+async function loadCategories() {
+
+  const list =
+    await api('/api/admin/categories');
+
+  categories = list || [];
+
+  const select =
+    document.getElementById('foodCategory');
+
+  select.innerHTML = `
+    <option value="">
+      不选择分类
+    </option>
+  `;
+
+  categories.forEach(category => {
+
+    select.innerHTML += `
+      <option value="${category.id}">
+        ${escapeHtml(category.name)}
+      </option>
+    `;
+
+  });
+
+}
+
+
+// ==================================================
+// 加载菜品
+// ==================================================
+
+async function loadFoods() {
+
+  try {
+
+    const list =
+      await api('/api/admin/foods');
+
+    const tbody =
+      document.getElementById('foodTableBody');
+
+
+    if (!list || list.length === 0) {
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="9">
+            暂无菜品
+          </td>
+        </tr>
+      `;
+
+      return;
+    }
+
+
+    tbody.innerHTML =
+      list.map(food => {
+
+        let imageHtml = '无';
+
+        if (food.image) {
+
+          imageHtml = `
+            <img
+              src="${escapeHtml(food.image)}"
+              style="
+                width:60px;
+                height:60px;
+                object-fit:cover;
+                border-radius:6px;
+                cursor:pointer;
+              "
+              onclick="window.open(
+                '${escapeJs(food.image)}',
+                '_blank'
+              )"
+            >
+          `;
+
+        }
+
+
+        const statusText =
+          food.status === 'on_sale'
+            ? '上架'
+            : '下架';
+
+
+        const statusClass =
+          food.status === 'on_sale'
+            ? 'completed'
+            : 'rejected';
+
+
+        return `
+
+          <tr>
+
+            <td>
+              ${food.id}
+            </td>
+
+            <td>
+              ${imageHtml}
+            </td>
+
+            <td>
+              ${escapeHtml(food.name)}
+            </td>
+
+            <td>
+              ${escapeHtml(food.category_name || '未分类')}
+            </td>
+
+            <td>
+              ¥${(Number(food.price || 0) / 100).toFixed(2)}
+            </td>
+
+            <td>
+              ${escapeHtml(food.description || '')}
+            </td>
+
+            <td>
+              ${food.sort_order}
+            </td>
+
+            <td>
+
+              <span class="badge ${statusClass}">
+                ${statusText}
+              </span>
+
+            </td>
+
+            <td>
+
+              <button
+                onclick="editFood(${food.id})"
+              >
+                编辑
+              </button>
+
+              <button
+                class="${food.status === 'on_sale' ? 'gray' : ''}"
+                onclick="toggleFood(${food.id})"
+              >
+                ${food.status === 'on_sale'
+                  ? '下架'
+                  : '上架'}
+              </button>
+
+            </td>
+
+          </tr>
+
+        `;
+
+      }).join('');
+
+  } catch (error) {
+
+    console.error(error);
+
+  }
+
+}
+
+
+// ==================================================
+// 添加菜品
+// ==================================================
+
+async function addFood() {
+
+  const name =
+    document.getElementById('foodName')
+      .value
+      .trim();
+
+
+  const priceYuan =
+    document.getElementById('foodPrice')
+      .value;
+
+
+  const categoryId =
+    document.getElementById('foodCategory')
+      .value;
+
+
+  const sortOrder =
+    Number(
+      document.getElementById('foodSort')
+        .value
+    ) || 0;
+
+
+  const image =
+    document.getElementById('foodImage')
+      .value
+      .trim();
+
+
+  const description =
+    document.getElementById('foodDescription')
+      .value
+      .trim();
+
+
+  if (!name) {
+
+    alert('请输入菜品名称');
+
+    return;
+  }
+
+
+  if (
+    priceYuan === '' ||
+    Number(priceYuan) < 0
+  ) {
+
+    alert('请输入正确的菜品价格');
+
+    return;
+  }
+
+
+  const price =
+    Math.round(
+      Number(priceYuan) * 100
+    );
+
+
+  try {
+
+    await api('/api/admin/foods', {
+
+      method: 'POST',
+
+      body: {
+
+        category_id:
+          categoryId
+            ? Number(categoryId)
+            : null,
+
+        name,
+
+        price,
+
+        image,
+
+        description,
+
+        sort_order: sortOrder
+
+      }
+
+    });
+
+
+    alert('菜品添加成功');
+
+
+    document.getElementById('foodName').value = '';
+
+    document.getElementById('foodPrice').value = '';
+
+    document.getElementById('foodCategory').value = '';
+
+    document.getElementById('foodSort').value = '0';
+
+document.getElementById('foodImage').value = '';
+
+document.getElementById('foodImageFile').value = '';
+
+document.getElementById('uploadPreview').style.display = 'none';
+
+document.getElementById('uploadPreviewImage').src = '';
+
+document.getElementById('uploadStatus').textContent = '';
+
+document.getElementById('foodDescription').value = '';
+
+
+    loadFoods();
+
+  } catch (error) {
+
+    console.error(error);
+
+  }
+
+}
+
+
+// ==================================================
+// 编辑菜品
+// ==================================================
+
+async function editFood(id) {
+
+  const list =
+    await api('/api/admin/foods');
+
+
+  const food =
+    list.find(item => item.id === id);
+
+
+  if (!food) {
+
+    alert('菜品不存在');
+
+    return;
+  }
+
+
+  const name =
+    prompt(
+      '菜品名称：',
+      food.name
+    );
+
+
+  if (name === null) {
+    return;
+  }
+
+
+  if (!name.trim()) {
+
+    alert('菜品名称不能为空');
+
+    return;
+  }
+
+
+  const price =
+    prompt(
+      '价格（元）：',
+      (Number(food.price || 0) / 100).toFixed(2)
+    );
+
+
+  if (price === null) {
+    return;
+  }
+
+
+  const priceNumber =
+    Number(price);
+
+
+  if (
+    !Number.isFinite(priceNumber) ||
+    priceNumber < 0
+  ) {
+
+    alert('价格不正确');
+
+    return;
+  }
+
+
+  const description =
+    prompt(
+      '菜品描述：',
+      food.description || ''
+    );
+
+
+  if (description === null) {
+    return;
+  }
+
+
+  const sortOrderText =
+    prompt(
+      '排序：',
+      food.sort_order || 0
+    );
+
+
+  if (sortOrderText === null) {
+    return;
+  }
+
+
+  const sortOrder =
+    Number(sortOrderText);
+
+
+  if (!Number.isInteger(sortOrder)) {
+
+    alert('排序必须是整数');
+
+    return;
+  }
+
+
+  try {
+
+    await api(
+      `/api/admin/foods/${id}`,
+      {
+
+        method: 'PUT',
+
+        body: {
+
+          category_id:
+            food.category_id
+              ? Number(food.category_id)
+              : null,
+
+          name:
+            name.trim(),
+
+          price:
+            Math.round(priceNumber * 100),
+
+          image:
+            food.image || '',
+
+          description:
+            description.trim(),
+
+          sort_order:
+            sortOrder
+
+        }
+
+      }
+    );
+
+
+    alert('菜品修改成功');
+
+    loadFoods();
+
+  } catch (error) {
+
+    console.error(error);
+
+  }
+
+}
+
+
+// ==================================================
+// 上架 / 下架
+// ==================================================
+
+async function toggleFood(id) {
+
+  if (
+    !confirm(
+      '确定要修改这个菜品的上架状态吗？'
+    )
+  ) {
+
+    return;
+
+  }
+
+
+  try {
+
+    await api(
+      `/api/admin/foods/${id}/toggle`,
+      {
+        method: 'POST'
+      }
+    );
+
+
+    loadFoods();
+
+  } catch (error) {
+
+    console.error(error);
+
+  }
+
+}
+
+
+// ==================================================
+// 图片上传
+// ==================================================
+
+async function chooseImage() {
+
+  const fileInput =
+    document.getElementById('foodImageFile');
+
+  const file =
+    fileInput.files[0];
+
+  if (!file) {
+
+    alert('请先选择一张图片');
+
+    return;
+
+  }
+
+
+  if (!file.type.startsWith('image/')) {
+
+    alert('请选择图片文件');
+
+    return;
+
+  }
+
+
+  if (file.size > 10 * 1024 * 1024) {
+
+    alert('图片不能超过 10MB');
+
+    return;
+
+  }
+
+
+  const statusEl =
+    document.getElementById('uploadStatus');
+
+  const previewBox =
+    document.getElementById('uploadPreview');
+
+  const previewImage =
+    document.getElementById('uploadPreviewImage');
+
+
+  statusEl.textContent =
+    '正在上传，请稍候……';
+
+
+  try {
+
+    const formData =
+      new FormData();
+
+    formData.append(
+      'file',
+      file
+    );
+
+
+    const res =
+      await fetch(
+        '/api/upload',
+        {
+          method: 'POST',
+
+          headers: {
+            'Authorization':
+              'Bearer ' + (getToken() || '')
+          },
+
+          body: formData
+        }
+      );
+
+
+    const json =
+      await res.json();
+
+
+    if (
+      res.status !== 200 ||
+      json.code !== 0
+    ) {
+
+      throw new Error(
+        json.message ||
+        '图片上传失败'
+      );
+
+    }
+
+
+    const imageUrl =
+      json.data.url;
+
+
+    document.getElementById(
+      'foodImage'
+    ).value = imageUrl;
+
+
+    previewImage.src =
+      imageUrl;
+
+    previewBox.style.display =
+      'block';
+
+
+    statusEl.textContent =
+      '图片上传成功';
+
+
+    alert('图片上传成功');
+
+  } catch (error) {
+
+    console.error(
+      '图片上传失败：',
+      error
+    );
+
+
+    statusEl.textContent =
+      '图片上传失败';
+
+
+    alert(
+      error.message ||
+      '图片上传失败，请检查后端服务是否正常'
+    );
+
+  }
+
+}
+
+
+// ==================================================
+// HTML 转义
+// ==================================================
+
+function escapeHtml(value) {
+
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+}
+
+
+// ==================================================
+// JS 字符串转义
+// ==================================================
+
+function escapeJs(value) {
+
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '')
+    .replace(/\n/g, '\\n');
+
+}
+
+
+// ==================================================
+// 页面初始化
+// ==================================================
+
+async function loadPage() {
+
+  await loadCategories();
+
+  await loadFoods();
+
+}
+
+
+initPage(loadPage);
+
+
+</script>
+
+</body>
+</html>

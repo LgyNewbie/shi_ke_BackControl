@@ -132,8 +132,85 @@ CREATE TABLE IF NOT EXISTS admins (
   role TEXT NOT NULL DEFAULT 'admin',
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
+
+-- =========================
+-- 菜品分类表
+-- =========================
+CREATE TABLE IF NOT EXISTS food_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'enabled',
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+-- =========================
+-- 菜品表
+-- =========================
+CREATE TABLE IF NOT EXISTS foods (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category_id INTEGER,
+  name TEXT NOT NULL,
+  price INTEGER NOT NULL DEFAULT 0,
+  image TEXT,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'on_sale',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (category_id) REFERENCES food_categories(id)
+);
 `);
 
+// =========================
+// 食客留言表
+// =========================
+db.exec(`
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  content TEXT NOT NULL,
+  images TEXT,
+  status TEXT NOT NULL DEFAULT 'normal',
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- =========================
+-- 留言点赞表
+-- 一个用户对同一条留言只能点赞一次
+-- =========================
+CREATE TABLE IF NOT EXISTS message_likes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  message_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(message_id, user_id),
+  FOREIGN KEY (message_id) REFERENCES messages(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- =========================
+-- 留言评论表
+-- parent_id = NULL：一级评论
+-- parent_id 有值：回复某条评论
+-- is_admin = 1：商家/管理员回复
+-- =========================
+CREATE TABLE IF NOT EXISTS message_comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  message_id INTEGER NOT NULL,
+  user_id INTEGER,
+  content TEXT NOT NULL,
+  parent_id INTEGER,
+  is_admin INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (message_id) REFERENCES messages(id),
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (parent_id) REFERENCES message_comments(id)
+);
+`);
 // 首次启动时，如果还没有管理员账号，就用 .env 里配置的初始账号密码创建一个
 const adminCount = db.prepare('SELECT COUNT(*) AS c FROM admins').get().c;
 if (adminCount === 0) {

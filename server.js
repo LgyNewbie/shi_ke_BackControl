@@ -14,6 +14,7 @@ const couponRoutes = require('./routes/coupon');
 const complaintRoutes = require('./routes/complaint');
 const refundRoutes = require('./routes/refund');
 const adminRoutes = require('./routes/admin');
+const messageRoutes = require('./routes/message');
 
 const app = express();
 // =========================
@@ -66,7 +67,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
   }
 
   const imageUrl =
-    `http://192.168.53.145:3000/uploads/${req.file.filename}`;
+    `http://192.168.254.145:3000/uploads/${req.file.filename}`;
 
   res.json({
     code: 0,
@@ -101,6 +102,7 @@ app.use('/api/coupons', couponRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/refunds', refundRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/messages', messageRoutes);
 
 // 管理后台网页（纯静态文件，浏览器直接访问 http://你的域名或IP:端口/admin/ 打开）
 app.use('/admin', express.static(path.join(__dirname, 'admin-panel')));

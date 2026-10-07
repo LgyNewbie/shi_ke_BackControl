@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户管理 - 小程序运营后台</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div id="app">
+
+  <!-- =========================
+       登录区域
+  ========================== -->
+  <div id="loginBox" class="login-box">
+
+    <h2>管理后台登录</h2>
+
+    <input
+      id="loginUsername"
+      placeholder="用户名"
+      value="admin"
+    >
+
+    <input
+      id="loginPassword"
+      placeholder="密码"
+      type="password"
+    >
+
+    <button onclick="doLogin()">登录</button>
+
+    <p id="loginMsg" class="msg"></p>
+
+  </div>
+
+
+  <!-- =========================
+       后台主体
+  ========================== -->
+  <div id="mainBox" style="display:none;">
+
+    <!-- 顶部 -->
+    <header>
+
+      <h1>小程序运营后台</h1>
+
+      <div>
+
+        <span id="whoami"></span>
+
+        <button
+          class="ghost"
+          onclick="logout()"
+        >
+          退出登录
+        </button>
+
+      </div>
+
+    </header>
+
+
+    <!-- =========================
+         左侧 / 顶部导航
+    ========================== -->
+    <nav>
+
+      <a href="index.html">
+        📊 数据统计
+      </a>
+
+      <a href="foods.html">
+        🍜 菜品管理
+      </a>
+
+      <a href="categories.html">
+        📂 分类管理
+      </a>
+
+      <a href="orders.html">
+        📦 订单管理
+      </a>
+
+      <a
+        href="users.html"
+        class="active"
+      >
+        👥 用户管理
+      </a>
+
+      <a href="messages.html">
+        💬 留言管理
+      </a>
+
+      <a href="polls.html">
+        🗳️ 投票管理
+      </a>
+
+      <a href="notices.html">
+        📢 公告管理
+      </a>
+
+      <a href="comments.html">
+        ⭐ 评论管理
+      </a>
+
+      <a href="coupons.html">
+        🎫 优惠券管理
+      </a>
+
+      <a href="delivery.html">
+        🚚 配送地址/区域
+      </a>
+
+      <a href="wallet.html">
+        💰 钱包管理
+      </a>
+
+      <a href="refunds.html">
+        💸 退款审核
+      </a>
+
+      <a href="complaints.html">
+        📢 投诉管理
+      </a>
+
+      <a href="settings.html">
+        ⚙️ 系统设置
+      </a>
+
+    </nav>
+
+
+    <!-- =========================
+         页面主体
+    ========================== -->
+    <main>
+
+      <h2>👥 用户管理</h2>
+
+
+      <!-- =========================
+           用户查询
+      ========================== -->
+      <div class="section">
+
+        <h3>用户查询</h3>
+
+        <div
+          class="form-row"
+          style="
+            margin-bottom:16px;
+            display:flex;
+            gap:10px;
+            align-items:center;
+            flex-wrap:wrap;
+          "
+        >
+
+          <label>搜索用户</label>
+
+          <input
+            type="text"
+            id="userSearch"
+            placeholder="请输入昵称或开发者账号"
+            style="
+              width:300px;
+              max-width:100%;
+            "
+            onkeydown="handleUserSearchKeydown(event)"
+          >
+
+          <button onclick="searchUsers()">
+            搜索
+          </button>
+
+          <button
+            class="gray"
+            onclick="clearUserSearch()"
+          >
+            清空
+          </button>
+
+          <button
+            class="gray"
+            onclick="loadUsers()"
+          >
+            刷新
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- =========================
+           用户列表
+      ========================== -->
+      <div class="section">
+
+        <h3>用户列表</h3>
+
+        <div style="overflow-x:auto;">
+
+          <table>
+
+            <thead>
+
+              <tr>
+                <th>ID</th>
+                <th>昵称</th>
+                <th>开发者账号</th>
+                <th>注册时间</th>
+                <th>操作</th>
+              </tr>
+
+            </thead>
+
+            <tbody id="userList">
+
+              <tr>
+
+                <td
+                  colspan="5"
+                  style="
+                    text-align:center;
+                    color:#888;
+                  "
+                >
+                  正在加载用户...
+
+                </td>
+
+              </tr>
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+</div>
+
+
+<!-- =========================
+     用户详情弹窗
+========================== -->
+<div
+  id="userDetailModal"
+  style="
+    display:none;
+    position:fixed;
+    left:0;
+    top:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.45);
+    z-index:9999;
+    align-items:center;
+    justify-content:center;
+  "
+>
+
+  <div
+    style="
+      width:600px;
+      max-width:90%;
+      max-height:80vh;
+      overflow-y:auto;
+      background:#fff;
+      border-radius:12px;
+      box-shadow:0 10px 40px rgba(0,0,0,0.2);
+    "
+  >
+
+    <!-- 弹窗标题 -->
+    <div
+      style="
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        padding:20px 24px;
+        border-bottom:1px solid #eee;
+      "
+    >
+
+      <h2
+        style="
+          margin:0;
+          font-size:20px;
+        "
+      >
+        👤 用户详情
+      </h2>
+
+      <button
+        class="gray"
+        onclick="closeUserDetail()"
+      >
+        关闭
+      </button>
+
+    </div>
+
+
+    <!-- 用户详情 -->
+    <div
+      id="userDetailContent"
+      style="padding:24px;"
+    >
+
+      <div
+        style="
+          text-align:center;
+          padding:30px;
+          color:#888;
+        "
+      >
+        正在加载...
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- =========================
+     公共 JS
+========================== -->
+<script src="app.js"></script>
+
+
+<script>
+
+  // ==========================================
+  // 用户列表
+  // ==========================================
+
+  async function loadUsers() {
+
+    const tbody =
+      document.getElementById('userList');
+
+    const input =
+      document.getElementById('userSearch');
+
+    const keyword =
+      input
+        ? input.value.trim()
+        : '';
+
+
+    // 加载提示
+    tbody.innerHTML = `
+      <tr>
+        <td
+          colspan="5"
+          style="
+            text-align:center;
+            color:#888;
+          "
+        >
+          正在加载用户...
+        </td>
+      </tr>
+    `;
+
+
+    try {
+
+      // ======================================
+      // 构造请求地址
+      // ======================================
+
+      const params =
+        new URLSearchParams();
+
+
+      if (keyword) {
+
+        params.set(
+          'keyword',
+          keyword
+        );
+
+      }
+
+
+      const query =
+        params.toString();
+
+
+      const url =
+        query
+          ? `/api/admin/users?${query}`
+          : '/api/admin/users';
+
+
+      console.log(
+        '用户搜索关键词：',
+        keyword
+      );
+
+      console.log(
+        '用户请求地址：',
+        url
+      );
+
+
+      // ======================================
+      // 请求后端
+      // ======================================
+
+      const result =
+        await api(url);
+
+
+      console.log(
+        '用户接口返回：',
+        result
+      );
+
+
+      // ======================================
+      // 兼容 api() 返回数组 / data
+      // ======================================
+
+      let users = [];
+
+
+      if (Array.isArray(result)) {
+
+        users = result;
+
+      } else if (
+        result &&
+        Array.isArray(result.data)
+      ) {
+
+        users = result.data;
+
+      }
+
+
+      // ======================================
+      // 没有搜索结果
+      // ======================================
+
+      if (!users.length) {
+
+        tbody.innerHTML = `
+          <tr>
+
+            <td
+              colspan="5"
+              style="
+                text-align:center;
+                color:#888;
+                padding:30px;
+              "
+            >
+              ${
+                keyword
+                  ? `没有找到符合“${escapeHtml(keyword)}”的用户`
+                  : '暂无用户数据'
+              }
+
+            </td>
+
+          </tr>
+        `;
+
+        return;
+
+      }
+
+
+      // ======================================
+      // 显示用户
+      // ======================================
+
+      tbody.innerHTML =
+        users.map(user => `
+
+          <tr>
+
+            <td>
+              #${user.id}
+            </td>
+
+            <td>
+              ${escapeHtml(user.nickname || '-')}
+            </td>
+
+            <td>
+              ${escapeHtml(user.dev_account || '-')}
+            </td>
+
+            <td>
+              ${escapeHtml(user.created_at || '-')}
+            </td>
+
+            <td>
+
+              <button
+                class="gray"
+                onclick="viewUser(${Number(user.id)})"
+              >
+                查看
+              </button>
+
+            </td>
+
+          </tr>
+
+        `).join('');
+
+
+    } catch (error) {
+
+      console.error(
+        '用户加载失败：',
+        error
+      );
+
+
+      tbody.innerHTML = `
+        <tr>
+
+          <td
+            colspan="5"
+            style="
+              text-align:center;
+              color:#e74c3c;
+              padding:30px;
+            "
+          >
+            用户加载失败，请查看控制台
+          </td>
+
+        </tr>
+      `;
+
+    }
+
+  }
+
+
+  // ==========================================
+  // 用户搜索
+  // ==========================================
+
+  function searchUsers() {
+
+    loadUsers();
+
+  }
+
+
+  // ==========================================
+  // 回车搜索
+  // ==========================================
+
+  function handleUserSearchKeydown(event) {
+
+    if (event.key === 'Enter') {
+
+      event.preventDefault();
+
+      searchUsers();
+
+    }
+
+  }
+
+
+  // ==========================================
+  // 清空搜索
+  // ==========================================
+
+  function clearUserSearch() {
+
+    const input =
+      document.getElementById('userSearch');
+
+
+    if (input) {
+
+      input.value = '';
+
+    }
+
+
+    loadUsers();
+
+  }
+
+
+  // ==========================================
+  // HTML 转义
+  // 防止用户昵称特殊字符影响页面
+  // ==========================================
+
+  function escapeHtml(value) {
+
+    return String(value)
+
+      .replace(/&/g, '&amp;')
+
+      .replace(/</g, '&lt;')
+
+      .replace(/>/g, '&gt;')
+
+      .replace(/"/g, '&quot;')
+
+      .replace(/'/g, '&#039;');
+
+  }
+
+
+  // ==========================================
+  // 查看用户详情
+  // ==========================================
+
+  async function viewUser(id) {
+
+    const modal =
+      document.getElementById(
+        'userDetailModal'
+      );
+
+    const content =
+      document.getElementById(
+        'userDetailContent'
+      );
+
+
+    modal.style.display = 'flex';
+
+
+    content.innerHTML = `
+      <div
+        style="
+          text-align:center;
+          padding:30px;
+          color:#888;
+        "
+      >
+        正在加载...
+      </div>
+    `;
+
+
+    try {
+
+      const data =
+        await api(
+          `/api/admin/users/${id}/detail`
+        );
+
+
+      if (!data) {
+
+        content.innerHTML = `
+          <div
+            style="
+              text-align:center;
+              padding:30px;
+              color:#e74c3c;
+            "
+          >
+            用户信息不存在
+          </div>
+        `;
+
+        return;
+
+      }
+
+
+      const user =
+        data.user || {};
+
+
+      const orderCount =
+        Number(
+          data.orderCount || 0
+        );
+
+
+      const complaintCount =
+        Number(
+          data.complaintCount || 0
+        );
+
+
+      const wallet =
+        data.wallet || {};
+
+
+      const balanceFen =
+        Number(
+          wallet.balance || 0
+        );
+
+
+      const balanceYuan =
+        fenToYuan(balanceFen);
+
+
+      content.innerHTML = `
+
+        <div
+          style="
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:16px;
+          "
+        >
+
+          <!-- 用户 ID -->
+          <div
+            style="
+              padding:16px;
+              border:1px solid #eee;
+              border-radius:10px;
+            "
+          >
+
+            <div
+              style="
+                color:#888;
+                font-size:13px;
+                margin-bottom:8px;
+              "
+            >
+              用户 ID
+            </div>
+
+            <div
+              style="
+                font-size:18px;
+                font-weight:600;
+              "
+            >
+              #${user.id ?? '-'}
+            </div>
+
+          </div>
+
+
+          <!-- 昵称 -->
+          <div
+            style="
+              padding:16px;
+              border:1px solid #eee;
+              border-radius:10px;
+            "
+          >
+
+            <div
+              style="
+                color:#888;
+                font-size:13px;
+                margin-bottom:8px;
+              "
+            >
+              昵称
+            </div>
+
+            <div
+              style="
+                font-size:18px;
+                font-weight:600;
+              "
+            >
+              ${escapeHtml(user.nickname || '-')}
+            </div>
+
+          </div>
+
+
+          <!-- 开发者账号 -->
+          <div
+            style="
+              padding:16px;
+              border:1px solid #eee;
+              border-radius:10px;
+            "
+          >
+
+            <div
+              style="
+                color:#888;
+                font-size:13px;
+                margin-bottom:8px;
+              "
+            >
+              开发者账号
+            </div>
+
+            <div
+              style="
+                font-size:16px;
+                font-weight:600;
+              "
+            >
+              ${escapeHtml(user.dev_account || '-')}
+            </div>
+
+          </div>
+
+
+          <!-- 注册时间 -->
+          <div
+            style="
+              padding:16px;
+              border:1px solid #eee;
+              border-radius:10px;
+            "
+          >
+
+            <div
+              style="
+                color:#888;
+                font-size:13px;
+                margin-bottom:8px;
+              "
+            >
+              注册时间
+            </div>
+
+            <div
+              style="
+                font-size:15px;
+              "
+            >
+              ${escapeHtml(user.created_at || '-')}
+            </div>
+
+          </div>
+
+
+          <!-- 订单数量 -->
+          <div
+            style="
+              padding:16px;
+              border:1px solid #eee;
+              border-radius:10px;
+            "
+          >
+
+            <div
+              style="
+                color:#888;
+                font-size:13px;
+                margin-bottom:8px;
+              "
+            >
+              订单数量
+            </div>
+
+            <div
+              style="
+                font-size:18px;
+                font-weight:600;
+              "
+            >
+              ${orderCount}
+            </div>
+
+          </div>
+
+
+          <!-- 投诉数量 -->
+          <div
+            style="
+              padding:16px;
+              border:1px solid #eee;
+              border-radius:10px;
+            "
+          >
+
+            <div
+              style="
+                color:#888;
+                font-size:13px;
+                margin-bottom:8px;
+              "
+            >
+              投诉数量
+            </div>
+
+            <div
+              style="
+                font-size:18px;
+                font-weight:600;
+              "
+            >
+              ${complaintCount}
+            </div>
+
+          </div>
+
+
+          <!-- 钱包余额 -->
+          <div
+            style="
+              grid-column:1 / -1;
+              padding:18px;
+              border:1px solid #eee;
+              border-radius:10px;
+              background:#fafafa;
+            "
+          >
+
+            <div
+              style="
+                color:#888;
+                font-size:13px;
+                margin-bottom:8px;
+              "
+            >
+              钱包余额
+            </div>
+
+            <div
+              style="
+                font-size:24px;
+                font-weight:700;
+              "
+            >
+              ¥${balanceYuan}
+            </div>
+
+          </div>
+
+        </div>
+
+      `;
+
+
+    } catch (error) {
+
+      console.error(
+        '用户详情加载失败：',
+        error
+      );
+
+
+      content.innerHTML = `
+        <div
+          style="
+            text-align:center;
+            padding:30px;
+            color:#e74c3c;
+          "
+        >
+          用户详情加载失败，请查看控制台
+        </div>
+      `;
+
+    }
+
+  }
+
+
+  // ==========================================
+  // 关闭用户详情
+  // ==========================================
+
+  function closeUserDetail() {
+
+    const modal =
+      document.getElementById(
+        'userDetailModal'
+      );
+
+
+    if (modal) {
+
+      modal.style.display = 'none';
+
+    }
+
+  }
+
+
+  // ==========================================
+  // 点击弹窗背景关闭
+  // ==========================================
+
+  document.addEventListener(
+    'click',
+    function(event) {
+
+      const modal =
+        document.getElementById(
+          'userDetailModal'
+        );
+
+
+      if (
+        modal &&
+        event.target === modal
+      ) {
+
+        closeUserDetail();
+
+      }
+
+    }
+  );
+
+
+  // ==========================================
+  // 初始化
+  // ==========================================
+
+  initPage(loadUsers);
+
+</script>
+
+</body>
+</html>

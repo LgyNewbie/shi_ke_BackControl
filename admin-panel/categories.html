@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>分类管理</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div id="app">
+
+  <!-- 登录框 -->
+  <div id="loginBox" class="login-box">
+    <h2>管理后台登录</h2>
+
+    <input
+      id="loginUsername"
+      placeholder="用户名"
+      value="admin"
+    >
+
+    <input
+      id="loginPassword"
+      placeholder="密码"
+      type="password"
+    >
+
+    <button onclick="doLogin()">登录</button>
+
+    <p id="loginMsg" class="msg"></p>
+  </div>
+
+
+  <!-- 主界面 -->
+  <div id="mainBox" style="display:none;">
+
+    <header>
+      <h1>小程序运营后台</h1>
+
+      <div>
+        <span id="whoami"></span>
+        <button class="ghost" onclick="logout()">退出登录</button>
+      </div>
+    </header>
+
+
+    <!-- 左侧菜单 -->
+    <nav>
+
+      <a href="index.html">📊 数据统计</a>
+
+      <a href="foods.html">🍜 菜品管理</a>
+
+      <a href="categories.html" class="active">📂 分类管理</a>
+
+      <a href="orders.html">📦 订单管理</a>
+
+      <a href="users.html">👥 用户管理</a>
+
+      <a href="messages.html">💬 留言管理</a>
+
+      <a href="polls.html">🗳️ 投票管理</a>
+
+      <a href="notices.html">📢 公告管理</a>
+
+      <a href="comments.html">⭐ 评论管理</a>
+
+      <a href="coupons.html">🎫 优惠券管理</a>
+
+      <a href="delivery.html">🚚 配送地址/区域</a>
+
+      <a href="wallet.html">💰 钱包管理</a>
+
+      <a href="refunds.html">💸 退款审核</a>
+
+      <a href="complaints.html">📢 投诉管理</a>
+
+      <a href="settings.html">⚙️ 系统设置</a>
+
+    </nav>
+
+
+    <!-- 页面内容 -->
+    <main>
+
+      <h2>分类管理</h2>
+
+
+      <!-- 新增分类 -->
+      <div class="section">
+
+        <h3>新增分类</h3>
+
+        <div class="form-row">
+
+          <input
+            id="categoryName"
+            placeholder="例如：主食、饮料、小吃"
+          >
+
+          <input
+            id="categorySort"
+            type="number"
+            value="0"
+            placeholder="排序"
+          >
+
+          <button onclick="addCategory()">
+            添加分类
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- 分类列表 -->
+      <div class="section">
+
+        <h3>分类列表</h3>
+
+        <table>
+
+          <thead>
+
+            <tr>
+              <th>ID</th>
+              <th>分类名称</th>
+              <th>排序</th>
+              <th>状态</th>
+              <th>创建时间</th>
+              <th>操作</th>
+            </tr>
+
+          </thead>
+
+          <tbody id="categoryTableBody">
+
+            <tr>
+              <td colspan="6">
+                正在加载……
+              </td>
+            </tr>
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </main>
+
+  </div>
+
+</div>
+
+
+<script src="app.js"></script>
+
+
+<script>
+
+
+// =========================
+// 加载分类
+// =========================
+
+async function loadCategories() {
+
+  try {
+
+    const list = await api('/api/admin/categories');
+
+    const tbody =
+      document.getElementById('categoryTableBody');
+
+    if (!list || list.length === 0) {
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6">
+            暂无分类
+          </td>
+        </tr>
+      `;
+
+      return;
+    }
+
+
+    tbody.innerHTML = list.map(item => {
+
+      const statusText =
+        item.status === 'enabled'
+          ? '启用'
+          : '停用';
+
+      const statusClass =
+        item.status === 'enabled'
+          ? 'completed'
+          : 'rejected';
+
+      return `
+
+        <tr>
+
+          <td>${item.id}</td>
+
+          <td>
+            ${escapeHtml(item.name)}
+          </td>
+
+          <td>
+            ${item.sort_order}
+          </td>
+
+          <td>
+            <span class="badge ${statusClass}">
+              ${statusText}
+            </span>
+          </td>
+
+          <td>
+            ${item.created_at || ''}
+          </td>
+
+          <td>
+
+            <button
+              onclick="editCategory(
+                ${item.id},
+                '${escapeJs(item.name)}',
+                ${item.sort_order}
+              )"
+            >
+              编辑
+            </button>
+
+            <button
+              class="${item.status === 'enabled' ? 'gray' : ''}"
+              onclick="toggleCategory(${item.id})"
+            >
+              ${item.status === 'enabled' ? '停用' : '启用'}
+            </button>
+
+          </td>
+
+        </tr>
+
+      `;
+
+    }).join('');
+
+  } catch (error) {
+
+    console.error(error);
+
+  }
+
+}
+
+
+// =========================
+// 添加分类
+// =========================
+
+async function addCategory() {
+
+  const name =
+    document.getElementById('categoryName')
+      .value
+      .trim();
+
+  const sortOrder =
+    Number(
+      document.getElementById('categorySort').value
+    ) || 0;
+
+
+  if (!name) {
+
+    alert('请输入分类名称');
+
+    return;
+  }
+
+
+  try {
+
+    await api('/api/admin/categories', {
+
+      method: 'POST',
+
+      body: {
+        name,
+        sort_order: sortOrder
+      }
+
+    });
+
+
+    alert('分类添加成功');
+
+
+    document.getElementById('categoryName').value = '';
+
+    document.getElementById('categorySort').value = '0';
+
+
+    loadCategories();
+
+  } catch (error) {
+
+    console.error(error);
+
+  }
+
+}
+
+
+// =========================
+// 编辑分类
+// =========================
+
+async function editCategory(id, oldName, oldSort) {
+
+  const name =
+    prompt(
+      '请输入新的分类名称：',
+      oldName
+    );
+
+
+  if (name === null) {
+    return;
+  }
+
+
+  const newName = name.trim();
+
+
+  if (!newName) {
+
+    alert('分类名称不能为空');
+
+    return;
+  }
+
+
+  const sortText =
+    prompt(
+      '请输入排序数字：',
+      oldSort
+    );
+
+
+  if (sortText === null) {
+    return;
+  }
+
+
+  const sortOrder =
+    Number(sortText);
+
+
+  if (!Number.isInteger(sortOrder)) {
+
+    alert('排序必须是整数');
+
+    return;
+  }
+
+
+  try {
+
+    await api(
+      `/api/admin/categories/${id}`,
+      {
+        method: 'PUT',
+
+        body: {
+          name: newName,
+          sort_order: sortOrder
+        }
+      }
+    );
+
+
+    alert('分类修改成功');
+
+    loadCategories();
+
+  } catch (error) {
+
+    console.error(error);
+
+  }
+
+}
+
+
+// =========================
+// 启用 / 停用
+// =========================
+
+async function toggleCategory(id) {
+
+  if (!confirm('确定要修改这个分类的状态吗？')) {
+    return;
+  }
+
+
+  try {
+
+    await api(
+      `/api/admin/categories/${id}/toggle`,
+      {
+        method: 'POST'
+      }
+    );
+
+
+    loadCategories();
+
+  } catch (error) {
+
+    console.error(error);
+
+  }
+
+}
+
+
+// =========================
+// 防止 HTML 注入
+// =========================
+
+function escapeHtml(value) {
+
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+}
+
+
+// =========================
+// 防止 JS 字符串问题
+// =========================
+
+function escapeJs(value) {
+
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '')
+    .replace(/\n/g, '\\n');
+
+}
+
+
+// =========================
+// 页面初始化
+// =========================
+
+initPage(loadCategories);
+
+</script>
+
+</body>
+</html>

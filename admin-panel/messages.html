@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>留言管理 - 小程序运营后台</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      align-items: center;
+    }
+
+    .toolbar input,
+    .toolbar select {
+      padding: 9px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .toolbar input {
+      width: 280px;
+    }
+
+    .toolbar button {
+      padding: 9px 18px;
+      border: none;
+      border-radius: 6px;
+      background: #1677ff;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .toolbar button:hover {
+      opacity: 0.9;
+    }
+
+    .table-wrap {
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 13px 12px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    th {
+      background: #f7f8fa;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    td {
+      vertical-align: middle;
+    }
+
+    .content-cell {
+      max-width: 360px;
+      line-height: 1.6;
+      word-break: break-all;
+    }
+
+    .empty {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+    }
+
+    .status-normal {
+      color: #16a34a;
+      font-weight: 600;
+    }
+
+    .status-hidden {
+      color: #999;
+      font-weight: 600;
+    }
+
+    .count {
+      color: #666;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="app">
+
+  <!-- 登录区域 -->
+  <div id="loginBox" class="login-box">
+    <h2>管理后台登录</h2>
+
+    <input
+      id="loginUsername"
+      placeholder="用户名"
+      value="admin"
+    >
+
+    <input
+      id="loginPassword"
+      placeholder="密码"
+      type="password"
+    >
+
+    <button onclick="doLogin()">登录</button>
+
+    <p id="loginMsg" class="msg"></p>
+  </div>
+
+
+  <!-- 后台主体 -->
+  <div id="mainBox" style="display:none;">
+
+    <header>
+      <h1>小程序运营后台</h1>
+
+      <div>
+        <span id="whoami"></span>
+        <button class="ghost" onclick="logout()">退出登录</button>
+      </div>
+    </header>
+
+
+    <!-- 左侧/顶部导航 -->
+    <nav>
+      <a href="index.html">📊 数据统计</a>
+      <a href="foods.html">🍜 菜品管理</a>
+      <a href="categories.html">📂 分类管理</a>
+      <a href="orders.html">📦 订单管理</a>
+      <a href="users.html">👥 用户管理</a>
+      <a href="messages.html" class="active">💬 留言管理</a>
+      <a href="polls.html">🗳️ 投票管理</a>
+      <a href="notices.html">📢 公告管理</a>
+      <a href="comments.html">⭐ 评论管理</a>
+      <a href="coupons.html">🎫 优惠券管理</a>
+      <a href="delivery.html">🚚 配送地址/区域</a>
+      <a href="wallet.html">💰 钱包管理</a>
+      <a href="refunds.html">💸 退款审核</a>
+      <a href="complaints.html">📢 投诉管理</a>
+      <a href="settings.html">⚙️ 系统设置</a>
+    </nav>
+
+
+    <!-- 页面内容 -->
+    <main>
+
+      <h2>留言管理</h2>
+
+      <div class="toolbar">
+
+        <input
+          id="keyword"
+          placeholder="搜索留言内容 / 用户昵称 / 账号"
+          onkeydown="if(event.key === 'Enter') loadMessages()"
+        >
+
+        <select id="status">
+          <option value="">全部状态</option>
+          <option value="normal">正常</option>
+          <option value="hidden">已隐藏</option>
+        </select>
+
+        <button onclick="loadMessages()">搜索</button>
+
+      </div>
+
+
+      <div class="table-wrap">
+
+        <table>
+
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>用户</th>
+              <th>留言内容</th>
+              <th>点赞</th>
+              <th>评论</th>
+              <th>状态</th>
+              <th>发布时间</th>
+	      <th>操作</th>
+            </tr>
+          </thead>
+
+          <tbody id="messageTableBody">
+            <tr>
+              <td colspan="8" class="empty">
+                正在加载……
+              </td>
+            </tr>
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </main>
+
+  </div>
+
+</div>
+
+
+<script src="app.js"></script>
+
+<script>
+
+  async function loadMessages() {
+
+    const keyword =
+      document.getElementById('keyword').value.trim();
+
+    const status =
+      document.getElementById('status').value;
+
+    const params = new URLSearchParams();
+
+    if (keyword) {
+      params.set('keyword', keyword);
+    }
+
+    if (status) {
+      params.set('status', status);
+    }
+
+    try {
+
+      const data = await api(
+        '/api/admin/messages?' + params.toString()
+      );
+
+      const tbody =
+        document.getElementById('messageTableBody');
+
+      if (!data || data.length === 0) {
+
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" class="empty">
+              暂无留言
+            </td>
+          </tr>
+        `;
+
+        return;
+      }
+
+
+      tbody.innerHTML = data.map(item => {
+
+        const content =
+          escapeHtml(item.content || '');
+
+        const nickname =
+          escapeHtml(item.nickname || '未设置昵称');
+
+        const devAccount =
+          escapeHtml(item.dev_account || '-');
+
+        let statusText = '正常';
+        let statusClass = 'status-normal';
+
+        if (item.status === 'hidden') {
+          statusText = '已隐藏';
+          statusClass = 'status-hidden';
+        }
+
+        return `
+          <tr>
+
+            <td>${item.id}</td>
+
+            <td>
+              <div>${nickname}</div>
+              <div style="color:#999;font-size:12px;">
+                ${devAccount}
+              </div>
+            </td>
+
+            <td class="content-cell">
+              ${content}
+            </td>
+
+            <td class="count">
+              👍 ${item.like_count || 0}
+            </td>
+
+            <td class="count">
+              💬 ${item.comment_count || 0}
+            </td>
+
+            <td>
+              <span class="${statusClass}">
+                ${statusText}
+              </span>
+            </td>
+
+            <td>
+              ${item.created_at || '-'}
+            </td>
+<td>
+<button class="view-btn" onclick="showMessageDetail(${item.id})">查看</button>
+<button
+  class="view-btn"
+  onclick="changeMessageStatus(${item.id}, '${item.status}')"
+>
+  ${item.status === 'normal' ? '隐藏' : '恢复'}
+</button>
+</td>
+
+          </tr>
+        `;
+
+      }).join('');
+
+    } catch (error) {
+
+      console.error('加载留言失败：', error);
+
+    }
+
+  }
+
+async function showMessageDetail(messageId) {
+
+  try {
+
+    const data = await api(
+      `/api/admin/messages/${messageId}/detail`
+    );
+
+    const message = data.message;
+    const comments = data.comments || [];
+
+    let images = '';
+
+    if (message.images && message.images.length > 0) {
+
+      images = `
+        <div style="margin-top:15px;">
+          <strong>留言图片：</strong>
+
+          <div style="
+            display:flex;
+            gap:10px;
+            flex-wrap:wrap;
+            margin-top:10px;
+          ">
+            ${message.images.map(image => `
+              <img
+                src="${escapeHtml(image)}"
+                style="
+                  width:120px;
+                  height:120px;
+                  object-fit:cover;
+                  border-radius:6px;
+                  border:1px solid #eee;
+                "
+              >
+            `).join('')}
+          </div>
+        </div>
+      `;
+
+    }
+
+
+    let commentHtml = '';
+
+    if (comments.length === 0) {
+
+      commentHtml = `
+        <div style="color:#999;padding:20px 0;">
+          暂无评论
+        </div>
+      `;
+
+    } else {
+
+      commentHtml = comments.map(comment => {
+
+        const nickname =
+  comment.is_admin
+    ? '🍜 餐厅商家'
+    : escapeHtml(
+        comment.nickname || '未知用户'
+      );
+
+const content =
+  escapeHtml(comment.content || '');
+
+const adminLabel =
+  comment.is_admin
+    ? '<span style="color:#1677ff;">官方回复</span>'
+    : '';
+
+        return `
+          <div style="
+            padding:12px 0;
+            border-bottom:1px solid #eee;
+          ">
+
+            <div style="font-weight:600;">
+              ${nickname}
+              ${adminLabel}
+            </div>
+
+            <div style="
+              margin-top:6px;
+              line-height:1.6;
+            ">
+              ${content}
+            </div>
+
+            <div style="
+              margin-top:5px;
+              color:#999;
+              font-size:12px;
+            ">
+              ${comment.created_at || '-'}
+            </div>
+
+          </div>
+        `;
+
+      }).join('');
+
+    }
+
+
+    const oldModal =
+      document.getElementById('messageDetailModal');
+
+    if (oldModal) {
+      oldModal.remove();
+    }
+
+
+    const modal = document.createElement('div');
+
+    modal.id = 'messageDetailModal';
+
+    modal.innerHTML = `
+
+      <div style="
+        position:fixed;
+        inset:0;
+        background:rgba(0,0,0,.45);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        z-index:9999;
+        padding:20px;
+      ">
+
+        <div style="
+          width:700px;
+          max-width:100%;
+          max-height:85vh;
+          overflow-y:auto;
+          background:#fff;
+          border-radius:10px;
+          padding:24px;
+          box-sizing:border-box;
+        ">
+
+          <div style="
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            margin-bottom:20px;
+          ">
+
+            <h3 style="margin:0;">
+              留言详情
+            </h3>
+
+            <button
+              onclick="closeMessageDetail()"
+              style="
+                border:none;
+                background:none;
+                font-size:24px;
+                cursor:pointer;
+              "
+            >
+              ×
+            </button>
+
+          </div>
+
+
+          <div>
+
+            <p>
+              <strong>留言 ID：</strong>
+              ${message.id}
+            </p>
+
+            <p>
+              <strong>用户：</strong>
+              ${escapeHtml(
+                message.nickname || '未设置昵称'
+              )}
+            </p>
+
+            <p>
+              <strong>账号：</strong>
+              ${escapeHtml(
+                message.dev_account || '-'
+              )}
+            </p>
+
+            <p>
+              <strong>发布时间：</strong>
+              ${message.created_at || '-'}
+            </p>
+
+            <p>
+              <strong>状态：</strong>
+              ${message.status === 'hidden'
+                ? '已隐藏'
+                : '正常'
+              }
+            </p>
+
+            <p>
+              <strong>点赞：</strong>
+              👍 ${data.likeCount || 0}
+            </p>
+
+            <p>
+              <strong>评论：</strong>
+              💬 ${data.commentCount || 0}
+            </p>
+
+
+            <div style="
+              margin-top:20px;
+              padding:15px;
+              background:#f7f8fa;
+              border-radius:6px;
+              line-height:1.8;
+              white-space:pre-wrap;
+              word-break:break-word;
+            ">
+              ${escapeHtml(message.content || '')}
+            </div>
+
+            ${images}
+
+
+            <div style="margin-top:25px;">
+
+              <h4>
+                评论
+              </h4>
+
+              ${commentHtml}
+
+            </div>
+
+
+            <!-- 商家回复 -->
+
+            <div style="
+              margin-top:25px;
+              padding-top:20px;
+              border-top:1px solid #eee;
+            ">
+
+              <h4 style="margin:0 0 12px 0;">
+                商家回复
+              </h4>
+
+              <textarea
+                id="adminReplyContent"
+                placeholder="请输入回复内容..."
+                style="
+                  width:100%;
+                  min-height:100px;
+                  box-sizing:border-box;
+                  padding:10px;
+                  border:1px solid #ddd;
+                  border-radius:6px;
+                  resize:vertical;
+                  font-size:14px;
+                  line-height:1.6;
+                "
+              ></textarea>
+
+              <div style="
+                margin-top:10px;
+                text-align:right;
+              ">
+
+                <button
+                  onclick="submitAdminReply(${message.id})"
+                  style="
+                    padding:8px 18px;
+                    border:none;
+                    background:#1677ff;
+                    color:#fff;
+                    border-radius:6px;
+                    cursor:pointer;
+                  "
+                >
+                  回复
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div style="
+            text-align:right;
+            margin-top:20px;
+          ">
+
+            <button
+              onclick="closeMessageDetail()"
+              style="
+                padding:8px 18px;
+                border:1px solid #ddd;
+                background:#fff;
+                border-radius:6px;
+                cursor:pointer;
+              "
+            >
+              关闭
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    `;
+
+    document.body.appendChild(modal);
+
+  } catch (error) {
+
+    console.error('加载留言详情失败：', error);
+
+  }
+
+}
+
+async function submitAdminReply(messageId) {
+
+  const input =
+    document.getElementById('adminReplyContent');
+
+  if (!input) {
+    return;
+  }
+
+  const content = input.value.trim();
+
+  if (!content) {
+    alert('请输入回复内容');
+    return;
+  }
+
+  try {
+
+    await api(
+      `/api/admin/messages/${messageId}/comments`,
+      {
+        method: 'POST',
+        body: {
+          content
+        }
+      }
+    );
+
+    alert('回复成功');
+
+    // 重新打开详情，显示刚刚的回复
+    showMessageDetail(messageId);
+
+  } catch (error) {
+
+    console.error('商家回复失败：', error);
+
+  }
+
+}
+
+function closeMessageDetail() {
+
+  const modal =
+    document.getElementById('messageDetailModal');
+
+  if (modal) {
+    modal.remove();
+  }
+
+}
+
+async function changeMessageStatus(messageId, currentStatus) {
+  const newStatus = currentStatus === 'normal'
+    ? 'hidden'
+    : 'normal';
+
+  const actionText = newStatus === 'hidden'
+    ? '隐藏'
+    : '恢复';
+
+  const ok = confirm(`确定要${actionText}这条留言吗？`);
+
+  if (!ok) {
+    return;
+  }
+
+  try {
+    await api(`/api/admin/messages/${messageId}/status`, {
+      method: 'POST',
+      body: {
+        status: newStatus
+      }
+    });
+
+    alert(`留言${actionText}成功`);
+
+    loadMessages();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+  function escapeHtml(value) {
+
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+  }
+
+
+  initPage(loadMessages);
+
+</script>
+
+</body>
+</html>
