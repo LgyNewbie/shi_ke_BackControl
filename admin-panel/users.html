@@ -1,1036 +1,173 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>用户管理 - 小程序运营后台</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>用户管理</title>
+<link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-
-<div id="app">
-
-  <!-- =========================
-       登录区域
-  ========================== -->
-  <div id="loginBox" class="login-box">
-
-    <h2>管理后台登录</h2>
-
-    <input
-      id="loginUsername"
-      placeholder="用户名"
-      value="admin"
-    >
-
-    <input
-      id="loginPassword"
-      placeholder="密码"
-      type="password"
-    >
-
-    <button onclick="doLogin()">登录</button>
-
-    <p id="loginMsg" class="msg"></p>
-
-  </div>
-
-
-  <!-- =========================
-       后台主体
-  ========================== -->
-  <div id="mainBox" style="display:none;">
-
-    <!-- 顶部 -->
-    <header>
-
-      <h1>小程序运营后台</h1>
-
-      <div>
-
-        <span id="whoami"></span>
-
-        <button
-          class="ghost"
-          onclick="logout()"
-        >
-          退出登录
-        </button>
-
-      </div>
-
-    </header>
-
-
-    <!-- =========================
-         左侧 / 顶部导航
-    ========================== -->
-    <nav>
-
-      <a href="index.html">
-        📊 数据统计
-      </a>
-
-      <a href="foods.html">
-        🍜 菜品管理
-      </a>
-
-      <a href="categories.html">
-        📂 分类管理
-      </a>
-
-      <a href="orders.html">
-        📦 订单管理
-      </a>
-
-      <a
-        href="users.html"
-        class="active"
-      >
-        👥 用户管理
-      </a>
-
-      <a href="messages.html">
-        💬 留言管理
-      </a>
-
-      <a href="polls.html">
-        🗳️ 投票管理
-      </a>
-
-      <a href="notices.html">
-        📢 公告管理
-      </a>
-
-      <a href="comments.html">
-        ⭐ 评论管理
-      </a>
-
-      <a href="coupons.html">
-        🎫 优惠券管理
-      </a>
-
-      <a href="delivery.html">
-        🚚 配送地址/区域
-      </a>
-
-      <a href="wallet.html">
-        💰 钱包管理
-      </a>
-
-      <a href="refunds.html">
-        💸 退款审核
-      </a>
-
-      <a href="complaints.html">
-        📢 投诉管理
-      </a>
-
-      <a href="settings.html">
-        ⚙️ 系统设置
-      </a>
-
-    </nav>
-
-
-    <!-- =========================
-         页面主体
-    ========================== -->
-    <main>
-
-      <h2>👥 用户管理</h2>
-
-
-      <!-- =========================
-           用户查询
-      ========================== -->
-      <div class="section">
-
-        <h3>用户查询</h3>
-
-        <div
-          class="form-row"
-          style="
-            margin-bottom:16px;
-            display:flex;
-            gap:10px;
-            align-items:center;
-            flex-wrap:wrap;
-          "
-        >
-
-          <label>搜索用户</label>
-
-          <input
-            type="text"
-            id="userSearch"
-            placeholder="请输入昵称或开发者账号"
-            style="
-              width:300px;
-              max-width:100%;
-            "
-            onkeydown="handleUserSearchKeydown(event)"
-          >
-
-          <button onclick="searchUsers()">
-            搜索
-          </button>
-
-          <button
-            class="gray"
-            onclick="clearUserSearch()"
-          >
-            清空
-          </button>
-
-          <button
-            class="gray"
-            onclick="loadUsers()"
-          >
-            刷新
-          </button>
-
-        </div>
-
-      </div>
-
-
-      <!-- =========================
-           用户列表
-      ========================== -->
-      <div class="section">
-
-        <h3>用户列表</h3>
-
-        <div style="overflow-x:auto;">
-
-          <table>
-
-            <thead>
-
-              <tr>
-                <th>ID</th>
-                <th>昵称</th>
-                <th>开发者账号</th>
-                <th>注册时间</th>
-                <th>操作</th>
-              </tr>
-
-            </thead>
-
-            <tbody id="userList">
-
-              <tr>
-
-                <td
-                  colspan="5"
-                  style="
-                    text-align:center;
-                    color:#888;
-                  "
-                >
-                  正在加载用户...
-
-                </td>
-
-              </tr>
-
-            </tbody>
-
-          </table>
-
-        </div>
-
-      </div>
-
-    </main>
-
-  </div>
-
-</div>
-
-
-<!-- =========================
-     用户详情弹窗
-========================== -->
-<div
-  id="userDetailModal"
-  style="
-    display:none;
-    position:fixed;
-    left:0;
-    top:0;
-    width:100%;
-    height:100%;
-    background:rgba(0,0,0,0.45);
-    z-index:9999;
-    align-items:center;
-    justify-content:center;
-  "
->
-
-  <div
-    style="
-      width:600px;
-      max-width:90%;
-      max-height:80vh;
-      overflow-y:auto;
-      background:#fff;
-      border-radius:12px;
-      box-shadow:0 10px 40px rgba(0,0,0,0.2);
-    "
-  >
-
-    <!-- 弹窗标题 -->
-    <div
-      style="
-        display:flex;
-        align-items:center;
-        justify-content:space-between;
-        padding:20px 24px;
-        border-bottom:1px solid #eee;
-      "
-    >
-
-      <h2
-        style="
-          margin:0;
-          font-size:20px;
-        "
-      >
-        👤 用户详情
-      </h2>
-
-      <button
-        class="gray"
-        onclick="closeUserDetail()"
-      >
-        关闭
-      </button>
-
-    </div>
-
-
-    <!-- 用户详情 -->
-    <div
-      id="userDetailContent"
-      style="padding:24px;"
-    >
-
-      <div
-        style="
-          text-align:center;
-          padding:30px;
-          color:#888;
-        "
-      >
-        正在加载...
-      </div>
-
-    </div>
-
-  </div>
-
-</div>
-
-
-<!-- =========================
-     公共 JS
-========================== -->
+<div id="app"></div>
 <script src="app.js"></script>
-
-
 <script>
+Admin.init({ key: 'users', title: '用户管理' }, async (main) => {
+  const { api, act, esc, yuan, badge, modal, confirmBox, renderPager, debounce, $ } = Admin;
+  const state = { page: 1, pageSize: 20, total: 0, keyword: '', status: '' };
+  let rows = [];
 
-  // ==========================================
-  // 用户列表
-  // ==========================================
+  main.innerHTML = `
+    <div class="toolbar">
+      <input type="search" id="kw" placeholder="搜索昵称 / 账号 / 手机号 / 用户ID">
+      <select id="st">
+        <option value="">全部状态</option>
+        <option value="normal">正常</option>
+        <option value="blocked">已禁用</option>
+      </select>
+      <button class="btn ghost" id="reload">刷新</button>
+    </div>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>用户</th><th>手机号</th><th class="num">订单数</th><th class="num">累计消费</th>
+          <th class="num">钱包余额</th><th class="num">可用券</th><th>状态</th><th>注册 / 最近登录</th><th>操作</th>
+        </tr></thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+    <div id="pager"></div>`;
 
-  async function loadUsers() {
+  const avatar = (u) => u.avatar
+    ? `<img class="thumb" style="border-radius:50%" src="${esc(u.avatar)}" alt="">`
+    : `<div class="thumb" style="border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px">👤</div>`;
 
-    const tbody =
-      document.getElementById('userList');
-
-    const input =
-      document.getElementById('userSearch');
-
-    const keyword =
-      input
-        ? input.value.trim()
-        : '';
-
-
-    // 加载提示
-    tbody.innerHTML = `
-      <tr>
-        <td
-          colspan="5"
-          style="
-            text-align:center;
-            color:#888;
-          "
-        >
-          正在加载用户...
-        </td>
-      </tr>
-    `;
-
-
-    try {
-
-      // ======================================
-      // 构造请求地址
-      // ======================================
-
-      const params =
-        new URLSearchParams();
-
-
-      if (keyword) {
-
-        params.set(
-          'keyword',
-          keyword
-        );
-
-      }
-
-
-      const query =
-        params.toString();
-
-
-      const url =
-        query
-          ? `/api/admin/users?${query}`
-          : '/api/admin/users';
-
-
-      console.log(
-        '用户搜索关键词：',
-        keyword
-      );
-
-      console.log(
-        '用户请求地址：',
-        url
-      );
-
-
-      // ======================================
-      // 请求后端
-      // ======================================
-
-      const result =
-        await api(url);
-
-
-      console.log(
-        '用户接口返回：',
-        result
-      );
-
-
-      // ======================================
-      // 兼容 api() 返回数组 / data
-      // ======================================
-
-      let users = [];
-
-
-      if (Array.isArray(result)) {
-
-        users = result;
-
-      } else if (
-        result &&
-        Array.isArray(result.data)
-      ) {
-
-        users = result.data;
-
-      }
-
-
-      // ======================================
-      // 没有搜索结果
-      // ======================================
-
-      if (!users.length) {
-
-        tbody.innerHTML = `
-          <tr>
-
-            <td
-              colspan="5"
-              style="
-                text-align:center;
-                color:#888;
-                padding:30px;
-              "
-            >
-              ${
-                keyword
-                  ? `没有找到符合“${escapeHtml(keyword)}”的用户`
-                  : '暂无用户数据'
-              }
-
-            </td>
-
-          </tr>
-        `;
-
-        return;
-
-      }
-
-
-      // ======================================
-      // 显示用户
-      // ======================================
-
-      tbody.innerHTML =
-        users.map(user => `
-
-          <tr>
-
-            <td>
-              #${user.id}
-            </td>
-
-            <td>
-              ${escapeHtml(user.nickname || '-')}
-            </td>
-
-            <td>
-              ${escapeHtml(user.dev_account || '-')}
-            </td>
-
-            <td>
-              ${escapeHtml(user.created_at || '-')}
-            </td>
-
-            <td>
-
-              <button
-                class="gray"
-                onclick="viewUser(${Number(user.id)})"
-              >
-                查看
-              </button>
-
-            </td>
-
-          </tr>
-
-        `).join('');
-
-
-    } catch (error) {
-
-      console.error(
-        '用户加载失败：',
-        error
-      );
-
-
-      tbody.innerHTML = `
+  async function load() {
+    const res = await api('/api/admin/users', {
+      raw: true,
+      query: { page: state.page, pageSize: state.pageSize, keyword: state.keyword, status: state.status }
+    });
+    rows = res.data || [];
+    state.total = res.total || 0;
+    const tb = $('#tb');
+    if (!rows.length) {
+      tb.innerHTML = '<tr><td colspan="9" class="empty-state">没有符合条件的用户</td></tr>';
+    } else {
+      tb.innerHTML = rows.map((u) => `
         <tr>
-
-          <td
-            colspan="5"
-            style="
-              text-align:center;
-              color:#e74c3c;
-              padding:30px;
-            "
-          >
-            用户加载失败，请查看控制台
-          </td>
-
-        </tr>
-      `;
-
+          <td><div class="cell-food">${avatar(u)}<div>
+            <div class="name">${esc(u.nickname || '未命名')} <span class="muted sm-text">#${u.id}</span></div>
+            <div class="muted sm-text">${esc(u.dev_account || '')}</div></div></div></td>
+          <td>${esc(u.phone || '-')}</td>
+          <td class="num">${u.order_count}</td>
+          <td class="num">${yuan(u.spent)}</td>
+          <td class="num">${yuan(u.balance)}</td>
+          <td class="num">${u.coupon_count}</td>
+          <td>${u.status === 'blocked' ? badge('已禁用', 'red') : badge('正常', 'green')}</td>
+          <td class="sm-text">${esc(u.created_at || '')}<br><span class="muted">${esc(u.last_login_at || '从未登录')}</span></td>
+          <td><div class="row-actions">
+            <button class="btn sm ghost" data-act="detail" data-id="${u.id}">详情</button>
+            ${u.status === 'blocked'
+              ? `<button class="btn sm primary" data-act="unblock" data-id="${u.id}">恢复</button>`
+              : `<button class="btn sm danger" data-act="block" data-id="${u.id}">禁用</button>`}
+          </div></td>
+        </tr>`).join('');
     }
-
+    renderPager($('#pager'), state, (p) => { state.page = p; load(); });
   }
 
-
-  // ==========================================
-  // 用户搜索
-  // ==========================================
-
-  function searchUsers() {
-
-    loadUsers();
-
+  async function toggleStatus(u, block) {
+    const name = u.nickname || ('#' + u.id);
+    const ok = await confirmBox({
+      title: block ? '禁用用户' : '恢复用户',
+      message: block
+        ? `确定禁用用户「${name}」吗？\n禁用后该用户不能登录和下单。`
+        : `确定恢复用户「${name}」吗？恢复后可正常登录和下单。`,
+      danger: block, okText: block ? '确认禁用' : '确认恢复'
+    });
+    if (!ok) return false;
+    await act(`/api/admin/users/${u.id}/status`, 'POST', { status: block ? 'blocked' : 'normal' });
+    load();
+    return true;
   }
 
+  async function showDetail(id) {
+    const [d, w, cps] = await Promise.all([
+      api(`/api/admin/users/${id}/detail`),
+      api(`/api/wallet/admin/user/${id}`, { silent: true }).catch(() => null),
+      api(`/api/coupons/admin/user/${id}`, { silent: true }).catch(() => [])
+    ]);
+    const u = d.user;
+    const cpList = Array.isArray(cps) ? cps : [];
+    const unused = cpList.filter((c) => c.status === 'unused').length;
+    const cpColor = { unused: 'green', locked: 'orange', used: 'gray', revoked: 'red', expired: 'gray' };
+    const txs = (w && w.transactions || []).slice(0, 8);
 
-  // ==========================================
-  // 回车搜索
-  // ==========================================
-
-  function handleUserSearchKeydown(event) {
-
-    if (event.key === 'Enter') {
-
-      event.preventDefault();
-
-      searchUsers();
-
-    }
-
-  }
-
-
-  // ==========================================
-  // 清空搜索
-  // ==========================================
-
-  function clearUserSearch() {
-
-    const input =
-      document.getElementById('userSearch');
-
-
-    if (input) {
-
-      input.value = '';
-
-    }
-
-
-    loadUsers();
-
-  }
-
-
-  // ==========================================
-  // HTML 转义
-  // 防止用户昵称特殊字符影响页面
-  // ==========================================
-
-  function escapeHtml(value) {
-
-    return String(value)
-
-      .replace(/&/g, '&amp;')
-
-      .replace(/</g, '&lt;')
-
-      .replace(/>/g, '&gt;')
-
-      .replace(/"/g, '&quot;')
-
-      .replace(/'/g, '&#039;');
-
-  }
-
-
-  // ==========================================
-  // 查看用户详情
-  // ==========================================
-
-  async function viewUser(id) {
-
-    const modal =
-      document.getElementById(
-        'userDetailModal'
-      );
-
-    const content =
-      document.getElementById(
-        'userDetailContent'
-      );
-
-
-    modal.style.display = 'flex';
-
-
-    content.innerHTML = `
-      <div
-        style="
-          text-align:center;
-          padding:30px;
-          color:#888;
-        "
-      >
-        正在加载...
+    const html = `
+      <div class="detail-section">
+        <div class="cell-food">${avatar(u)}<div>
+          <div class="name">${esc(u.nickname || '未命名')} ${u.status === 'blocked' ? badge('已禁用', 'red') : badge('正常', 'green')}</div>
+          <div class="muted sm-text">ID ${u.id} · ${esc(u.dev_account || '')}</div></div></div>
       </div>
-    `;
-
-
-    try {
-
-      const data =
-        await api(
-          `/api/admin/users/${id}/detail`
-        );
-
-
-      if (!data) {
-
-        content.innerHTML = `
-          <div
-            style="
-              text-align:center;
-              padding:30px;
-              color:#e74c3c;
-            "
-          >
-            用户信息不存在
-          </div>
-        `;
-
-        return;
-
-      }
-
-
-      const user =
-        data.user || {};
-
-
-      const orderCount =
-        Number(
-          data.orderCount || 0
-        );
-
-
-      const complaintCount =
-        Number(
-          data.complaintCount || 0
-        );
-
-
-      const wallet =
-        data.wallet || {};
-
-
-      const balanceFen =
-        Number(
-          wallet.balance || 0
-        );
-
-
-      const balanceYuan =
-        fenToYuan(balanceFen);
-
-
-      content.innerHTML = `
-
-        <div
-          style="
-            display:grid;
-            grid-template-columns:1fr 1fr;
-            gap:16px;
-          "
-        >
-
-          <!-- 用户 ID -->
-          <div
-            style="
-              padding:16px;
-              border:1px solid #eee;
-              border-radius:10px;
-            "
-          >
-
-            <div
-              style="
-                color:#888;
-                font-size:13px;
-                margin-bottom:8px;
-              "
-            >
-              用户 ID
-            </div>
-
-            <div
-              style="
-                font-size:18px;
-                font-weight:600;
-              "
-            >
-              #${user.id ?? '-'}
-            </div>
-
-          </div>
-
-
-          <!-- 昵称 -->
-          <div
-            style="
-              padding:16px;
-              border:1px solid #eee;
-              border-radius:10px;
-            "
-          >
-
-            <div
-              style="
-                color:#888;
-                font-size:13px;
-                margin-bottom:8px;
-              "
-            >
-              昵称
-            </div>
-
-            <div
-              style="
-                font-size:18px;
-                font-weight:600;
-              "
-            >
-              ${escapeHtml(user.nickname || '-')}
-            </div>
-
-          </div>
-
-
-          <!-- 开发者账号 -->
-          <div
-            style="
-              padding:16px;
-              border:1px solid #eee;
-              border-radius:10px;
-            "
-          >
-
-            <div
-              style="
-                color:#888;
-                font-size:13px;
-                margin-bottom:8px;
-              "
-            >
-              开发者账号
-            </div>
-
-            <div
-              style="
-                font-size:16px;
-                font-weight:600;
-              "
-            >
-              ${escapeHtml(user.dev_account || '-')}
-            </div>
-
-          </div>
-
-
-          <!-- 注册时间 -->
-          <div
-            style="
-              padding:16px;
-              border:1px solid #eee;
-              border-radius:10px;
-            "
-          >
-
-            <div
-              style="
-                color:#888;
-                font-size:13px;
-                margin-bottom:8px;
-              "
-            >
-              注册时间
-            </div>
-
-            <div
-              style="
-                font-size:15px;
-              "
-            >
-              ${escapeHtml(user.created_at || '-')}
-            </div>
-
-          </div>
-
-
-          <!-- 订单数量 -->
-          <div
-            style="
-              padding:16px;
-              border:1px solid #eee;
-              border-radius:10px;
-            "
-          >
-
-            <div
-              style="
-                color:#888;
-                font-size:13px;
-                margin-bottom:8px;
-              "
-            >
-              订单数量
-            </div>
-
-            <div
-              style="
-                font-size:18px;
-                font-weight:600;
-              "
-            >
-              ${orderCount}
-            </div>
-
-          </div>
-
-
-          <!-- 投诉数量 -->
-          <div
-            style="
-              padding:16px;
-              border:1px solid #eee;
-              border-radius:10px;
-            "
-          >
-
-            <div
-              style="
-                color:#888;
-                font-size:13px;
-                margin-bottom:8px;
-              "
-            >
-              投诉数量
-            </div>
-
-            <div
-              style="
-                font-size:18px;
-                font-weight:600;
-              "
-            >
-              ${complaintCount}
-            </div>
-
-          </div>
-
-
-          <!-- 钱包余额 -->
-          <div
-            style="
-              grid-column:1 / -1;
-              padding:18px;
-              border:1px solid #eee;
-              border-radius:10px;
-              background:#fafafa;
-            "
-          >
-
-            <div
-              style="
-                color:#888;
-                font-size:13px;
-                margin-bottom:8px;
-              "
-            >
-              钱包余额
-            </div>
-
-            <div
-              style="
-                font-size:24px;
-                font-weight:700;
-              "
-            >
-              ¥${balanceYuan}
-            </div>
-
-          </div>
-
-        </div>
-
-      `;
-
-
-    } catch (error) {
-
-      console.error(
-        '用户详情加载失败：',
-        error
-      );
-
-
-      content.innerHTML = `
-        <div
-          style="
-            text-align:center;
-            padding:30px;
-            color:#e74c3c;
-          "
-        >
-          用户详情加载失败，请查看控制台
-        </div>
-      `;
-
-    }
-
+      <div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr))">
+        <div class="stat"><div class="num" style="font-size:20px">${d.orderCount}</div><div class="label">订单数</div></div>
+        <div class="stat"><div class="num" style="font-size:20px">${yuan(d.spent)}</div><div class="label">累计消费</div></div>
+        <div class="stat"><div class="num" style="font-size:20px">${yuan(d.wallet.balance)}</div><div class="label">钱包余额</div></div>
+        <div class="stat"><div class="num" style="font-size:20px">${unused}</div><div class="label">可用优惠券</div></div>
+        <div class="stat"><div class="num" style="font-size:20px">${d.complaintCount}</div><div class="label">投诉</div></div>
+        <div class="stat"><div class="num" style="font-size:20px">${d.messageCount}</div><div class="label">留言</div></div>
+      </div>
+      <div class="detail-section"><h4>基本信息</h4>
+        <dl class="kv">
+          <dt>手机号</dt><dd>${esc(u.phone || '-')}</dd>
+          <dt>注册时间</dt><dd>${esc(u.created_at || '-')}</dd>
+          <dt>最近登录</dt><dd>${esc(u.last_login_at || '-')}</dd>
+          <dt>收藏数</dt><dd>${d.favoriteCount}</dd>
+        </dl></div>
+      <div class="detail-section"><h4>收货地址（${d.addresses.length}）</h4>
+        ${d.addresses.length ? d.addresses.map((a) => `<div class="sm-text" style="padding:3px 0">${a.is_default ? badge('默认', 'blue') + ' ' : ''}${esc(a.name || '')} ${esc(a.phone || '')} · ${esc(a.area_name || '')} ${esc(a.detail || '')}</div>`).join('') : '<div class="muted">暂无</div>'}
+      </div>
+      <div class="detail-section"><h4>钱包流水（最近 ${txs.length} 条）</h4>
+        ${txs.length ? `<table class="tbl" style="min-width:0"><tbody>${txs.map((t) => `<tr>
+          <td>${esc(t.type_text || t.type)}</td><td class="num" style="color:${t.amount < 0 ? 'var(--red)' : 'var(--green)'}">${t.amount > 0 ? '+' : ''}${Number(t.amount).toFixed(2)}</td>
+          <td class="muted sm-text">${esc(t.remark || '')}</td><td class="muted sm-text">${esc(t.created_at || '')}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">暂无流水</div>'}
+      </div>
+      <div class="detail-section"><h4>优惠券（共 ${cpList.length} 张，可用 ${unused} 张）</h4>
+        ${cpList.length ? `<table class="tbl" style="min-width:0"><tbody>${cpList.slice(0, 20).map((c) => `<tr>
+          <td>${esc(c.name)}</td><td>${badge(c.status_text || c.status, cpColor[c.status])}</td>
+          <td class="muted sm-text">${c.status === 'unused' || c.status === 'locked' ? '到期 ' : ''}${esc(c.expire_at || '')}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">暂无优惠券</div>'}
+      </div>
+      <div class="detail-section"><h4>最近订单（${d.orders.length}）</h4>
+        ${d.orders.length ? `<table class="tbl" style="min-width:0"><tbody>${d.orders.map((o) => `<tr>
+          <td class="mono">${esc(o.order_no)}</td><td class="ellipsis">${esc(o.title || '')}</td>
+          <td class="num">${yuan(o.amount)}</td><td>${badge(o.status_text, Admin.ORDER_COLORS[o.status])}</td>
+          <td class="muted sm-text">${esc(o.created_at)}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">暂无订单</div>'}
+      </div>`;
+
+    modal({
+      title: `用户详情 #${u.id}`, width: 720, body: html,
+      buttons: [
+        { text: '关闭', type: 'ghost' },
+        {
+          text: u.status === 'blocked' ? '恢复用户' : '禁用用户',
+          type: u.status === 'blocked' ? 'primary' : 'danger',
+          onClick: async () => { const done = await toggleStatus(u, u.status !== 'blocked'); return done ? undefined : false; }
+        }
+      ]
+    });
   }
 
-
-  // ==========================================
-  // 关闭用户详情
-  // ==========================================
-
-  function closeUserDetail() {
-
-    const modal =
-      document.getElementById(
-        'userDetailModal'
-      );
-
-
-    if (modal) {
-
-      modal.style.display = 'none';
-
-    }
-
-  }
-
-
-  // ==========================================
-  // 点击弹窗背景关闭
-  // ==========================================
-
-  document.addEventListener(
-    'click',
-    function(event) {
-
-      const modal =
-        document.getElementById(
-          'userDetailModal'
-        );
-
-
-      if (
-        modal &&
-        event.target === modal
-      ) {
-
-        closeUserDetail();
-
-      }
-
-    }
-  );
-
-
-  // ==========================================
-  // 初始化
-  // ==========================================
-
-  initPage(loadUsers);
-
+  $('#tb').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const id = Number(b.dataset.id);
+    const u = rows.find((x) => x.id === id);
+    if (b.dataset.act === 'detail') showDetail(id);
+    else if (u) toggleStatus(u, b.dataset.act === 'block');
+  });
+  $('#kw').addEventListener('input', debounce((e) => { state.keyword = e.target.value.trim(); state.page = 1; load(); }, 350));
+  $('#st').addEventListener('change', (e) => { state.status = e.target.value; state.page = 1; load(); });
+  $('#reload').addEventListener('click', load);
+  await load();
+});
 </script>
-
 </body>
 </html>

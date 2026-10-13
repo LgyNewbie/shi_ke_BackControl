@@ -7,139 +7,130 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="app">
-  <div id="loginBox" class="login-box">
-    <h2>管理后台登录</h2>
-    <input id="loginUsername" placeholder="用户名" value="admin">
-    <input id="loginPassword" placeholder="密码" type="password">
-    <button onclick="doLogin()">登录</button>
-    <p id="loginMsg" class="msg"></p>
-  </div>
-
-  <div id="mainBox" style="display:none;">
-    <header>
-      <h1>小程序运营后台</h1>
-      <div><span id="whoami"></span> <button class="ghost" onclick="logout()">退出登录</button></div>
-    </header>
-<!-- =========================
-     左侧菜单
-========================== -->
-<nav>
-
-  <a href="index.html">
-    📊 数据统计
-  </a>
-
-  <a href="foods.html">
-    🍜 菜品管理
-  </a>
-
-  <a href="categories.html">
-    📂 分类管理
-  </a>
-
-  <a href="orders.html" class="active">
-    📦 订单管理
-  </a>
-
-  <a href="users.html">
-    👥 用户管理
-  </a>
-
-  <a href="messages.html">
-    💬 留言管理
-  </a>
-
-  <a href="polls.html">
-    🗳️ 投票管理
-  </a>
-
-  <a href="notices.html">
-    📢 公告管理
-  </a>
-
-  <a href="comments.html">
-    ⭐ 评论管理
-  </a>
-
-  <a href="coupons.html">
-    🎫 优惠券管理
-  </a>
-
-  <a href="delivery.html">
-    🚚 配送地址/区域
-  </a>
-
-  <a href="wallet.html">
-    💰 钱包管理
-  </a>
-
-  <a href="refunds.html">
-    💸 退款审核
-  </a>
-
-  <a href="complaints.html">
-    📢 投诉管理
-  </a>
-
-  <a href="settings.html">
-    ⚙️ 系统设置
-  </a>
-
-</nav>
-    <main>
-      <div class="section">
-        <div class="form-row">
-          <span>筛选状态：</span>
-          <select id="statusFilter" onchange="loadRefunds()">
-            <option value="pending_review">待审核</option>
-            <option value="">全部</option>
-            <option value="completed">已完成</option>
-            <option value="rejected">已拒绝</option>
-          </select>
-        </div>
-        <table>
-          <thead><tr><th>ID</th><th>用户</th><th>关联订单</th><th>关联投诉</th><th>金额</th><th>原因</th><th>状态</th><th>提交时间</th><th>操作</th></tr></thead>
-          <tbody id="tableBody"></tbody>
-        </table>
-      </div>
-      <p class="tip">审核通过后，金额会自动计入用户的站内钱包余额（因为目前还没有接入微信支付退款接口）。</p>
-    </main>
-  </div>
-</div>
+<div id="app"></div>
 <script src="app.js"></script>
 <script>
-async function loadRefunds() {
-  const status = document.getElementById('statusFilter').value;
-  const list = await api('/api/refunds/admin/list' + (status ? `?status=${status}` : ''));
-  const tbody = document.getElementById('tableBody');
-  tbody.innerHTML = list.map(r => `
-    <tr>
-      <td>${r.id}</td>
-      <td>${r.nickname || r.dev_account}(#${r.user_id})</td>
-      <td>${r.order_id || '-'}</td>
-      <td>${r.complaint_id || '-'}</td>
-      <td>¥${fenToYuan(r.amount)}</td>
-      <td style="max-width:180px;">${r.reason || '-'}</td>
-      <td>${badge(r.status)}</td>
-      <td>${r.created_at}</td>
-      <td>
-        ${r.status === 'pending_review' ? `
-          <button onclick="review(${r.id}, 'approve')">通过并打款</button>
-          <button class="danger" onclick="review(${r.id}, 'reject')">拒绝</button>
-        ` : '-'}
-      </td>
-    </tr>
-  `).join('') || '<tr><td colspan="9" style="color:#999;">暂无记录</td></tr>';
-}
+Admin.init({ key: 'refunds', title: '退款审核' }, async (body, ctx) => {
+  const { api, act, esc, yuan, badge, confirmBox, formBox, renderPager, debounce, toast } = Admin;
+  const BASE = '/api/refunds/admin';
+  const STATUS = { pending_review: ['待审核', 'orange'], completed: ['已退款', 'green'], rejected: ['已拒绝', 'gray'] };
+  const st = { status: 'pending_review', keyword: '', page: 1, pageSize: 20, rows: [] };
 
-async function review(id, action) {
-  const remark = prompt(action === 'approve' ? '审核备注（可选）：' : '拒绝原因：') || '';
-  await api(`/api/refunds/admin/${id}/review`, { method: 'POST', body: { action, review_remark: remark } });
-  loadRefunds();
-}
+  body.innerHTML = `
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-s="pending_review">待审核<span class="cnt" id="pendCnt">0</span></button>
+      <button class="tab" data-s="">全部记录</button>
+      <button class="tab" data-s="completed">已退款</button>
+      <button class="tab" data-s="rejected">已拒绝</button>
+    </div>
+    <div class="tip info">审核通过后，退款金额会退回到用户的站内钱包（尚未接入微信支付退款）。通过时可修改退款金额，金额小于申请金额即为部分退款。</div>
+    <div class="toolbar">
+      <input type="text" id="kw" placeholder="搜索用户昵称 / 账号 / 订单号 / 原因">
+      <button class="btn ghost" id="reload">刷新</button>
+    </div>
+    <div class="card" style="padding:0"><div class="table-wrap" id="tbl"></div></div>
+    <div id="pager"></div>`;
 
-initPage(loadRefunds);
+  Admin.$$('#tabs .tab').forEach((t) => t.addEventListener('click', () => {
+    Admin.$$('#tabs .tab').forEach((x) => x.classList.toggle('active', x === t));
+    st.status = t.dataset.s; st.page = 1; load();
+  }));
+  Admin.$('#kw').addEventListener('input', debounce((e) => { st.keyword = e.target.value.trim(); st.page = 1; load(); }, 300));
+  Admin.$('#reload').addEventListener('click', load);
+
+  async function refreshPending() {
+    try {
+      const r = await api(BASE + '/list', { query: { status: 'pending_review', pageSize: 1 }, raw: true, silent: true });
+      Admin.$('#pendCnt').textContent = r.total;
+      Admin.$('#pendCnt').style.display = r.total ? '' : 'none';
+    } catch (e) { /* ignore */ }
+  }
+
+  async function load() {
+    const r = await api(BASE + '/list', { query: { status: st.status, keyword: st.keyword, page: st.page, pageSize: st.pageSize }, raw: true });
+    st.rows = r.data;
+    draw(r.total);
+    if (st.status === 'pending_review') { Admin.$('#pendCnt').textContent = r.total; Admin.$('#pendCnt').style.display = r.total ? '' : 'none'; }
+    else refreshPending();
+  }
+
+  function draw(total) {
+    const tbl = Admin.$('#tbl');
+    if (!st.rows.length) {
+      tbl.innerHTML = `<div class="empty-state">${st.status === 'pending_review' ? '没有待审核的退款，真清净 🎉' : '没有符合条件的退款记录'}</div>`;
+      Admin.$('#pager').innerHTML = '';
+      return;
+    }
+    tbl.innerHTML = `<table class="tbl"><thead><tr><th>退款单</th><th>用户</th><th>关联订单 / 投诉</th><th>金额</th><th>原因</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>
+      ${st.rows.map((r) => {
+        const s = STATUS[r.status] || [r.status, 'gray'];
+        return `<tr>
+          <td class="muted">#${r.id}</td>
+          <td>${esc(r.nickname || '(未设置昵称)')}<div class="sm-text muted">#${r.user_id} · ${esc(r.dev_account || '')}</div></td>
+          <td class="sm-text">${r.order_no ? '订单 ' + esc(r.order_no) : '-'}${r.complaint_id ? `<div class="muted">投诉#${r.complaint_id}</div>` : ''}</td>
+          <td><b>${yuan(r.amount)}</b></td>
+          <td class="sm-text" style="max-width:220px">${esc(r.reason || '-')}</td>
+          <td>${badge(s[0], s[1])}${r.review_remark ? `<div class="sm-text muted">${esc(r.reviewer || '')}：${esc(r.review_remark)}</div>` : ''}</td>
+          <td class="sm-text">申请：${esc(r.created_at || '')}${r.completed_at ? `<div class="muted">完成：${esc(r.completed_at)}</div>` : ''}</td>
+          <td>${r.status === 'pending_review' ? `<div class="row-actions">
+            <button class="btn sm primary" data-a="approve" data-id="${r.id}">通过</button>
+            <button class="btn sm danger" data-a="reject" data-id="${r.id}">拒绝</button></div>` : '-'}</td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+    Admin.$$('[data-a]', tbl).forEach((b) => b.addEventListener('click', () => {
+      const r = st.rows.find((x) => x.id === Number(b.dataset.id));
+      (b.dataset.a === 'approve' ? approve : reject)(r);
+    }));
+    renderPager(Admin.$('#pager'), { page: st.page, pageSize: st.pageSize, total }, (p) => { st.page = p; load(); });
+  }
+
+  async function approve(r) {
+    const v = await formBox({
+      title: `通过退款 #${r.id}`, width: 480, okText: '下一步：确认',
+      fields: [
+        { name: 'amount', label: '退款金额（元）', type: 'number', step: '0.01', min: 0.01, max: r.amount, required: true, value: r.amount, full: true,
+          hint: `用户申请 ${yuan(r.amount)}。可改小做部分退款，不能超过申请金额。` },
+        { name: 'remark', label: '审核备注（可选）', type: 'textarea', full: true, maxlength: 100, placeholder: '如：已核实，同意退款' }
+      ],
+      validate: (x) => {
+        const a = Number(x.amount);
+        if (!(a > 0)) return '退款金额必须大于 0';
+        if (a > r.amount + 1e-9) return `退款金额不能超过申请金额 ${yuan(r.amount)}`;
+        return '';
+      }
+    });
+    if (!v) return;
+    const amt = Math.round(Number(v.amount) * 100) / 100;
+    const partial = Math.round(amt * 100) < Math.round(r.amount * 100);
+    const ok = await confirmBox({
+      title: '确认退款',
+      message: `将退款 ${yuan(amt)} 到「${r.nickname || '用户#' + r.user_id}」的钱包。` +
+        (partial ? `\n这是部分退款（申请 ${yuan(r.amount)}）：将按调整后的金额退款。` : '') + '\n确定继续吗？',
+      okText: '确认退款'
+    });
+    if (!ok) return;
+    try {
+      await act(`${BASE}/${r.id}/review`, 'POST', { action: 'approve', amount: amt, review_remark: v.remark }, partial ? `已部分退款 ${yuan(amt)} 到用户钱包` : '退款已通过，已退回用户钱包');
+    } catch (e) { load(); return; }
+    ctx.refreshBadges();
+    load();
+  }
+
+  async function reject(r) {
+    const v = await formBox({
+      title: `拒绝退款 #${r.id}`, width: 460, okText: '确认拒绝', danger: true,
+      fields: [{ name: 'remark', label: '拒绝原因（会展示给用户）', type: 'textarea', required: true, full: true, maxlength: 100, placeholder: '如：商品已制作完成，不支持退款' }]
+    });
+    if (!v) return;
+    const ok = await confirmBox({ title: '确认拒绝', message: `确定拒绝「${r.nickname || '用户#' + r.user_id}」${yuan(r.amount)} 的退款申请吗？`, danger: true, okText: '确认拒绝' });
+    if (!ok) return;
+    try { await act(`${BASE}/${r.id}/review`, 'POST', { action: 'reject', review_remark: v.remark }, '已拒绝该退款申请'); } catch (e) { return; }
+    ctx.refreshBadges();
+    load();
+  }
+
+  await load();
+});
 </script>
 </body>
 </html>

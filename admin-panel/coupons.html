@@ -5,282 +5,311 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>优惠券管理</title>
 <link rel="stylesheet" href="style.css">
+<style>
+  .picker-list { border: 1px solid var(--line); border-radius: 8px; max-height: 220px; overflow-y: auto; margin-top: 8px; }
+  .picker-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #f0f2f5; cursor: pointer; font-size: 14px; }
+  .picker-item:last-child { border-bottom: none; }
+  .picker-item:hover { background: #f7f9fb; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 28px; }
+  .chip { background: var(--primary-soft); color: var(--primary); border-radius: 14px; padding: 3px 6px 3px 10px; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; }
+  .chip button { border: none; background: transparent; cursor: pointer; font-size: 15px; color: inherit; line-height: 1; }
+</style>
 </head>
 <body>
-<div id="app">
-  <div id="loginBox" class="login-box">
-    <h2>管理后台登录</h2>
-    <input id="loginUsername" placeholder="用户名" value="admin">
-    <input id="loginPassword" placeholder="密码" type="password">
-    <button onclick="doLogin()">登录</button>
-    <p id="loginMsg" class="msg"></p>
-  </div>
-
-  <div id="mainBox" style="display:none;">
-    <header>
-      <h1>小程序运营后台</h1>
-      <div><span id="whoami"></span> <button class="ghost" onclick="logout()">退出登录</button></div>
-    </header>
-<!-- =========================
-     左侧菜单
-========================== -->
-<nav>
-
-  <a href="index.html">
-    📊 数据统计
-  </a>
-
-  <a href="foods.html">
-    🍜 菜品管理
-  </a>
-
-  <a href="categories.html">
-    📂 分类管理
-  </a>
-
-  <a href="orders.html" class="active">
-    📦 订单管理
-  </a>
-
-  <a href="users.html">
-    👥 用户管理
-  </a>
-
-  <a href="messages.html">
-    💬 留言管理
-  </a>
-
-  <a href="polls.html">
-    🗳️ 投票管理
-  </a>
-
-  <a href="notices.html">
-    📢 公告管理
-  </a>
-
-  <a href="comments.html">
-    ⭐ 评论管理
-  </a>
-
-  <a href="coupons.html">
-    🎫 优惠券管理
-  </a>
-
-  <a href="delivery.html">
-    🚚 配送地址/区域
-  </a>
-
-  <a href="wallet.html">
-    💰 钱包管理
-  </a>
-
-  <a href="refunds.html">
-    💸 退款审核
-  </a>
-
-  <a href="complaints.html">
-    📢 投诉管理
-  </a>
-
-  <a href="settings.html">
-    ⚙️ 系统设置
-  </a>
-
-</nav>
-    <main>
-      <div class="section">
-        <h3>新建优惠券模板</h3>
-        <div class="form-row">
-          <input id="tplName" placeholder="券名称，如：新人满30减5">
-          <select id="tplType">
-            <option value="fixed">满减（固定金额）</option>
-          </select>
-          <input id="tplValue" placeholder="抵扣金额（元）" type="number" step="0.01">
-          <input id="tplMin" placeholder="使用门槛（元，可为0）" type="number" step="0.01">
-          <input id="tplDays" placeholder="领取后有效天数" type="number" value="30">
-          <button onclick="createTemplate()">创建</button>
-        </div>
-      </div>
-
-      <div class="section">
-        <h3>优惠券模板列表</h3>
-        <table>
-          <thead><tr><th>ID</th><th>名称</th><th>面额</th><th>门槛</th><th>有效天数</th><th>操作</th></tr></thead>
-          <tbody id="tplTableBody"></tbody>
-        </table>
-      </div>
-    
-      <div class="section">
-        <h3>发放记录 <span id="recordsTitle" style="font-weight:normal;color:#999;font-size:13px;"></span></h3>
-        <table>
-          <thead><tr><th>记录ID</th><th>用户</th><th>状态</th><th>领取时间</th><th>过期时间</th><th>操作</th></tr></thead>
-          <tbody id="recordsTableBody"><tr><td colspan="6" style="color:#999;">点击上方模板的"查看发放记录"</td></tr></tbody>
-        </table>
-      </div>
-    </main>
-  </div>
-</div>
+<div id="app"></div>
 <script src="app.js"></script>
 <script>
-let templates = [];
-async function loadTemplates() {
-  templates = await api('/api/coupons/admin/templates');
-  const tbody = document.getElementById('tplTableBody');
-  tbody.innerHTML = templates.map(t => `
-    <tr>
-      <td>${t.id}</td>
-      <td>${t.name}</td>
-      <td>¥${fenToYuan(t.value)}</td>
-      <td>¥${fenToYuan(t.min_amount)}</td>
-      <td>${t.valid_days}天</td>
-      <td>
-  <span style="
-    display:inline-block;
-    margin-right:8px;
-    color:${t.enabled === 1 ? '#2e7d32' : '#999'};
-    font-weight:600;
-  ">
-    ${t.enabled === 1 ? '启用中' : '已停用'}
-  </span>
+Admin.init({ key: 'coupons', title: '优惠券管理' }, async (body, ctx) => {
+  const { api, act, esc, yuan, badge, modal, confirmBox, formBox, renderPager, debounce, toast } = Admin;
+  const BASE = '/api/coupons/admin';
 
-  <button
-    onclick="toggleCouponTemplate(${t.id}, ${t.enabled})"
-  >
-    ${t.enabled === 1 ? '停用' : '启用'}
-  </button>
+  const state = {
+    tab: 'templates',
+    templates: [],
+    rec: { templateId: 'all', status: '', keyword: '', page: 1, pageSize: 20, rows: [] }
+  };
 
-  <button
-    ${t.enabled !== 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}
-    onclick="issueCoupon(${t.id})"
-  >
-    定向发放
-  </button>
+  const STATUS_COLOR = { unused: 'green', locked: 'orange', used: 'blue', revoked: 'red', expired: 'gray' };
 
-  <button
-    ${t.enabled !== 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}
-    onclick="issueCouponToAll(${t.id})"
-  >
-    发放给全部用户
-  </button>
+  ctx.setActions('<button class="btn primary" id="btnNew">+ 新建优惠券</button>');
+  Admin.$('#btnNew').addEventListener('click', () => editTemplate());
 
-  <button
-    class="gray"
-    onclick="viewRecords(${t.id}, '${t.name}')"
-  >
-    查看发放记录
-  </button>
-</td>
-    </tr>
-  `).join('') || '<tr><td colspan="6" style="color:#999;">暂无模板</td></tr>';
-}
+  body.innerHTML = `
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="templates">优惠券模板</button>
+      <button class="tab" data-tab="records">发放记录</button>
+    </div>
+    <div id="panelTpl"></div>
+    <div id="panelRec" style="display:none"></div>`;
 
-async function createTemplate() {
-  const name = document.getElementById('tplName').value.trim();
-  const type = document.getElementById('tplType').value;
-  const value = Math.round(parseFloat(document.getElementById('tplValue').value || '0') * 100);
-  const min_amount = Math.round(parseFloat(document.getElementById('tplMin').value || '0') * 100);
-  const valid_days = parseInt(document.getElementById('tplDays').value || '30', 10);
-  if (!name || !value) { alert('请填写名称和金额'); return; }
-  await api('/api/coupons/admin/templates', { method: 'POST', body: { name, type, value, min_amount, valid_days } });
-  document.getElementById('tplName').value = '';
-  document.getElementById('tplValue').value = '';
-  document.getElementById('tplMin').value = '';
-  loadTemplates();
-}
+  Admin.$$('#tabs .tab').forEach((t) => t.addEventListener('click', () => switchTab(t.dataset.tab)));
 
-async function toggleCouponTemplate(templateId, enabled) {
-  const action = enabled === 1 ? '停用' : '启用';
+  function switchTab(tab, templateId) {
+    state.tab = tab;
+    Admin.$$('#tabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
+    Admin.$('#panelTpl').style.display = tab === 'templates' ? '' : 'none';
+    Admin.$('#panelRec').style.display = tab === 'records' ? '' : 'none';
+    ctx.actions.style.display = tab === 'templates' ? '' : 'none';
+    if (tab === 'records') {
+      if (templateId !== undefined) state.rec.templateId = String(templateId);
+      state.rec.page = 1;
+      renderRecordsShell();
+      loadRecords();
+    }
+  }
 
-  const ok = confirm(
-    `确定要${action}这张优惠券吗？`
-  );
+  // ------------------------------------------------------------------ 模板
+  const fmtTime = (s) => (s ? String(s).replace('T', ' ').slice(0, 16) : '');
+  const toInput = (s) => (s ? String(s).replace(' ', 'T').slice(0, 16) : '');
 
-  if (!ok) return;
+  async function loadTemplates() {
+    state.templates = await api(BASE + '/templates');
+    renderTemplates();
+  }
 
-  try {
-    await api(`/api/coupons/admin/templates/${templateId}/toggle`, {
-      method: 'POST',
-      body: {
-        enabled: enabled === 1 ? 0 : 1
+  function renderTemplates() {
+    const box = Admin.$('#panelTpl');
+    if (!state.templates.length) {
+      box.innerHTML = '<div class="card"><div class="empty-state">还没有优惠券模板，点右上角「新建优惠券」创建一个</div></div>';
+      return;
+    }
+    box.innerHTML = `
+      <div class="tip info">提示：模板「停用」后用户无法领取、商家也无法发放，但已发到用户手里的券仍可使用；删除模板前需先回收用户手里未使用的券。</div>
+      <div class="card" style="padding:0"><div class="table-wrap"><table class="tbl">
+        <thead><tr><th>ID</th><th>优惠券</th><th>类型</th><th>领取方式</th><th>发放 / 总量</th><th>持有 / 已用</th><th>有效期</th><th>状态</th><th>操作</th></tr></thead>
+        <tbody>${state.templates.map((t) => `
+          <tr>
+            <td class="muted">#${t.id}</td>
+            <td><b>${esc(t.name)}</b><div class="sm-text muted">${esc(t.description)}${t.remark ? ' · ' + esc(t.remark) : ''}</div></td>
+            <td>${t.type === 'discount' ? badge('折扣券', 'purple') : badge('满减/立减券', 'blue')}</td>
+            <td>${t.claimable ? badge('用户可领取', 'green') : badge('仅商家发放', 'gray')}</td>
+            <td>${t.issued_count} / ${t.total_count > 0 ? t.total_count : '不限'}${t.remaining !== null ? `<div class="sm-text muted">剩余 ${t.remaining}</div>` : ''}</td>
+            <td>${t.holding_count} / ${t.used_count}</td>
+            <td class="sm-text">领券后 ${t.valid_days} 天内有效
+              ${t.start_time || t.end_time ? `<div class="muted">投放期：${esc(fmtTime(t.start_time) || '不限')} ~ ${esc(fmtTime(t.end_time) || '不限')}</div>` : ''}</td>
+            <td>${t.enabled ? badge('启用中', 'green') : badge('已停用', 'gray')}</td>
+            <td><div class="row-actions">
+              <button class="btn sm blue" data-act="issue" data-id="${t.id}">发放给用户</button>
+              <button class="btn sm" data-act="issueAll" data-id="${t.id}">全员发放</button>
+              <button class="btn sm ghost" data-act="records" data-id="${t.id}">记录</button>
+              <button class="btn sm ghost" data-act="edit" data-id="${t.id}">编辑</button>
+              <button class="btn sm ${t.enabled ? 'warn' : 'primary'}" data-act="toggle" data-id="${t.id}">${t.enabled ? '停用' : '启用'}</button>
+              <button class="btn sm danger" data-act="del" data-id="${t.id}">删除</button>
+            </div></td>
+          </tr>`).join('')}
+        </tbody></table></div></div>`;
+    Admin.$$('[data-act]', box).forEach((b) => b.addEventListener('click', () => {
+      const t = state.templates.find((x) => x.id === Number(b.dataset.id));
+      if (!t) return;
+      ({ issue: issueToUsers, issueAll, records: () => switchTab('records', t.id), edit: editTemplate, toggle, del })[b.dataset.act](t);
+    }));
+  }
+
+  async function editTemplate(t) {
+    const isEdit = !!(t && t.id);
+    t = t || { type: 'fixed', valid_days: 30, total_count: 0, claimable: 1 };
+    await formBox({
+      title: isEdit ? '编辑优惠券：' + t.name : '新建优惠券',
+      width: 600,
+      okText: isEdit ? '保存修改' : '创建',
+      fields: [
+        { name: 'name', label: '优惠券名称', required: true, value: t.name, full: true, maxlength: 30, placeholder: '如：新人立减5元' },
+        { name: 'type', label: '类型', type: 'select', value: t.type, options: [{ value: 'fixed', text: '满减 / 立减券（固定金额）' }, { value: 'discount', text: '折扣券（几折）' }] },
+        { name: 'value', label: '面额（立减：元；折扣：几折）', type: 'number', step: '0.01', min: 0, required: true, value: t.value, hint: '立减券填抵扣金额（元）；折扣券填 0~10 之间，如 8.5 表示 8.5 折' },
+        { name: 'min_amount', label: '使用门槛（元）', type: 'number', step: '0.01', min: 0, value: t.min_amount || 0, hint: '0 表示无门槛；按商品优惠后的金额判断' },
+        { name: 'valid_days', label: '领取后有效天数', type: 'number', min: 1, step: '1', required: true, value: t.valid_days },
+        { name: 'total_count', label: '发放总量', type: 'number', min: 0, step: '1', value: t.total_count || 0, hint: '0 表示不限量' },
+        { name: 'claimable', label: '领取方式', type: 'checkbox', checkText: '开放给用户在领券中心领取', value: !!t.claimable },
+        { name: 'start_time', label: '投放开始时间（可选）', type: 'datetime-local', value: toInput(t.start_time), hint: '限制用户领取的时间窗口，留空不限' },
+        { name: 'end_time', label: '投放结束时间（可选）', type: 'datetime-local', value: toInput(t.end_time) },
+        { name: 'remark', label: '备注（可选）', value: t.remark, full: true, maxlength: 60 }
+      ],
+      validate: (v) => {
+        const val = Number(v.value);
+        if (v.type === 'discount' && !(val > 0 && val < 10)) return '折扣必须在 0 ~ 10 之间（不含），如 8.5';
+        if (v.type === 'fixed' && !(val > 0)) return '抵扣金额必须大于 0';
+        if (v.start_time && v.end_time && v.start_time > v.end_time) return '结束时间不能早于开始时间';
+        return '';
+      },
+      submit: async (v) => {
+        const payload = { ...v, value: Number(v.value), min_amount: Number(v.min_amount || 0), valid_days: Number(v.valid_days), total_count: Number(v.total_count || 0), claimable: v.claimable ? 1 : 0 };
+        if (isEdit) await act(`${BASE}/templates/${t.id}`, 'PUT', payload);
+        else await act(`${BASE}/templates`, 'POST', payload);
       }
+    }).then((r) => { if (r) loadTemplates(); });
+  }
+
+  async function toggle(t) {
+    const next = t.enabled ? 0 : 1;
+    const ok = await confirmBox({
+      title: next ? '启用优惠券' : '停用优惠券',
+      message: next ? `确定启用「${t.name}」吗？启用后可发放，开放领取的券用户可在领券中心领取。` : `确定停用「${t.name}」吗？\n停用后用户无法领取、商家也无法发放；已发到用户手里的券不受影响。`,
+      danger: !next
     });
-
-    alert(`${action}成功`);
-
+    if (!ok) return;
+    await act(`${BASE}/templates/${t.id}/toggle`, 'POST', { enabled: next });
     loadTemplates();
-
-  } catch (error) {
-    console.error('优惠券状态修改失败：', error);
   }
-}
 
-async function issueCoupon(templateId) {
-  // 先拉用户列表方便你看着挑ID
-  const users = await api('/api/admin/users');
-  const preview = users.slice(0, 20).map(u => `${u.id}:${u.nickname || u.dev_account}`).join('\n');
-  const input = prompt(
-    `请输入要发放的用户ID，多个用逗号分隔，例如：1,2,3\n\n当前部分用户参考（ID:昵称）：\n${preview}`
-  );
-  if (!input) return;
-  const userIds = input.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
-  if (userIds.length === 0) { alert('未识别到有效的用户ID'); return; }
-  const data = await api('/api/coupons/admin/issue', { method: 'POST', body: { templateId, userIds } });
-  alert(`发放完成，成功 ${data.issuedCount} 人`);
-}
-
-async function issueCouponToAll(templateId) {
-  const ok = confirm(
-    '确定要把这张优惠券发放给全部用户吗？\n\n' +
-    '每个用户都会获得一张新的优惠券。'
-  );
-
-  if (!ok) return;
-
-  try {
-    const data = await api('/api/coupons/admin/issue-all', {
-      method: 'POST',
-      body: {
-        templateId
-      }
+  async function del(t) {
+    const ok = await confirmBox({
+      title: '删除优惠券模板',
+      message: `确定删除「${t.name}」吗？\n该模板下所有已使用/已过期/已回收的发放记录会一并删除，且不可恢复。\n（如果仍有用户持有未使用的券，需先回收。）`,
+      danger: true, okText: '确认删除'
     });
-
-    alert(
-      `发放完成！\n\n` +
-      `成功发放：${data.issuedCount} 人\n` +
-      `跳过用户：${data.skippedCount || 0} 人`
-    );
-  } catch (error) {
-    console.error('全部用户发放失败：', error);
+    if (!ok) return;
+    await act(`${BASE}/templates/${t.id}`, 'DELETE');
+    loadTemplates();
   }
-}
 
+  async function issueAll(t) {
+    if (!t.enabled) { toast('该券已停用，请先启用再发放', 'error'); return; }
+    const ok = await confirmBox({
+      title: '全员发放',
+      message: `确定把「${t.name}」（${t.description}）发放给全部正常状态的用户吗？\n已持有同款未使用券的用户会自动跳过。${t.total_count > 0 ? `\n剩余可发放 ${t.remaining} 张，超出部分不会发放。` : ''}`,
+      okText: '确认发放'
+    });
+    if (!ok) return;
+    const r = await act(`${BASE}/issue-all`, 'POST', { templateId: t.id });
+    toast(`已发放 ${r.issuedCount} 人，跳过 ${r.skippedCount} 人（共 ${r.totalUsers} 个用户）`, 'success');
+    loadTemplates();
+  }
 
+  // 指定用户发放：搜索 + 勾选
+  function issueToUsers(t) {
+    if (!t.enabled) { toast('该券已停用，请先启用再发放', 'error'); return; }
+    const selected = new Map();
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="tip info" style="margin-bottom:10px">将发放「<b>${esc(t.name)}</b>」（${esc(t.description)}）${t.remaining !== null ? `，剩余可发放 ${t.remaining} 张` : ''}</div>
+      <input class="field" id="pkKey" style="width:100%" placeholder="搜索用户：昵称 / 账号 / 手机号 / 用户ID" autocomplete="off">
+      <div class="picker-list" id="pkList"><div class="empty-state">输入关键词搜索，或直接查看最近用户</div></div>
+      <div style="margin-top:10px;font-size:13px">已选 <b id="pkCnt">0</b> 人：</div>
+      <div class="chips" id="pkChips"></div>`;
+    const $ = (s) => wrap.querySelector(s);
 
-async function viewRecords(templateId, name) {
-  document.getElementById('recordsTitle').textContent = `—— ${name}`;
-  const list = await api(`/api/coupons/admin/templates/${templateId}/records`);
-  const tbody = document.getElementById('recordsTableBody');
-  tbody.innerHTML = list.map(r => `
-    <tr>
-      <td>${r.id}</td>
-      <td>${r.nickname || r.dev_account}(#${r.user_id})</td>
-      <td>${badge(r.status)}</td>
-      <td>${r.issued_at}</td>
-      <td>${r.expire_at}</td>
-      <td>${r.status === 'unused' ? `<button class="danger" onclick="revokeCoupon(${r.id})">回收</button>` : '-'}</td>
-    </tr>
-  `).join('') || '<tr><td colspan="6" style="color:#999;">暂无发放记录</td></tr>';
-  window._lastTemplateId = templateId;
-  window._lastTemplateName = name;
-}
+    const drawChips = () => {
+      $('#pkCnt').textContent = selected.size;
+      $('#pkChips').innerHTML = [...selected.values()].map((u) => `<span class="chip">${esc(u.nickname || u.dev_account || ('用户' + u.id))} #${u.id}<button data-rm="${u.id}" title="移除">×</button></span>`).join('') || '<span class="muted">还没有选择用户</span>';
+      wrap.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { selected.delete(Number(b.dataset.rm)); drawChips(); drawList(lastRows); }));
+    };
+    let lastRows = [];
+    const drawList = (rows) => {
+      lastRows = rows;
+      $('#pkList').innerHTML = rows.length ? rows.map((u) => `
+        <label class="picker-item"><input type="checkbox" data-uid="${u.id}" ${selected.has(u.id) ? 'checked' : ''}>
+          <span><b>${esc(u.nickname || '(未设置昵称)')}</b> <span class="muted sm-text">#${u.id} · ${esc(u.dev_account || u.phone || '')} ${u.status === 'blocked' ? '· 已封禁' : ''}</span></span>
+        </label>`).join('') : '<div class="empty-state">没有找到用户</div>';
+      wrap.querySelectorAll('[data-uid]').forEach((c) => c.addEventListener('change', () => {
+        const u = rows.find((x) => x.id === Number(c.dataset.uid));
+        if (c.checked) selected.set(u.id, u); else selected.delete(u.id);
+        drawChips();
+      }));
+    };
+    const search = async () => {
+      try {
+        const r = await api('/api/admin/users', { query: { keyword: $('#pkKey').value.trim(), pageSize: 30, status: 'normal' }, silent: true });
+        drawList(r);
+      } catch (e) { $('#pkList').innerHTML = `<div class="empty-state">${esc(e.message)}</div>`; }
+    };
+    $('#pkKey').addEventListener('input', debounce(search, 300));
+    drawChips();
+    search();
 
-async function revokeCoupon(userCouponId) {
-  const reason = prompt('回收原因（可选）：') || '';
-  await api(`/api/coupons/admin/${userCouponId}/revoke`, { method: 'POST', body: { reason } });
-  viewRecords(window._lastTemplateId, window._lastTemplateName);
-}
+    modal({
+      title: '发放优惠券给指定用户',
+      width: 560,
+      body: wrap,
+      buttons: [
+        { text: '取消', type: 'ghost' },
+        {
+          text: '确认发放', type: 'primary', keepOpen: true,
+          onClick: async (m) => {
+            if (!selected.size) { toast('请至少选择一个用户', 'error'); return false; }
+            const ok = await confirmBox({ title: '确认发放', message: `确定把「${t.name}」发放给已选的 ${selected.size} 位用户吗？` });
+            if (!ok) return false;
+            const r = await act(`${BASE}/issue`, 'POST', { templateId: t.id, userIds: [...selected.keys()] });
+            m.close();
+            loadTemplates();
+            if (r && r.noQuotaCount) toast(`有 ${r.noQuotaCount} 人因总量不足未发放`, 'error');
+          }
+        }
+      ]
+    });
+  }
 
-initPage(loadTemplates);
+  // ------------------------------------------------------------------ 发放记录
+  function renderRecordsShell() {
+    const box = Admin.$('#panelRec');
+    box.innerHTML = `
+      <div class="toolbar">
+        <select id="rcTpl"><option value="all">全部优惠券</option>${state.templates.map((t) => `<option value="${t.id}">#${t.id} ${esc(t.name)}</option>`).join('')}</select>
+        <select id="rcStatus">
+          <option value="">全部状态</option><option value="unused">未使用</option><option value="locked">占用中（待付款）</option>
+          <option value="used">已使用</option><option value="revoked">已回收</option><option value="expired">已过期</option>
+        </select>
+        <input type="text" id="rcKey" placeholder="搜索用户昵称 / 账号 / 用户ID">
+        <button class="btn ghost" id="rcRefresh">刷新</button>
+      </div>
+      <div class="card" style="padding:0"><div class="table-wrap" id="rcTable"></div></div>
+      <div id="rcPager"></div>`;
+    Admin.$('#rcTpl').value = state.rec.templateId;
+    Admin.$('#rcStatus').value = state.rec.status;
+    Admin.$('#rcKey').value = state.rec.keyword;
+    Admin.$('#rcTpl').addEventListener('change', (e) => { state.rec.templateId = e.target.value; state.rec.page = 1; loadRecords(); });
+    Admin.$('#rcStatus').addEventListener('change', (e) => { state.rec.status = e.target.value; state.rec.page = 1; drawRecords(); });
+    Admin.$('#rcKey').addEventListener('input', debounce((e) => { state.rec.keyword = e.target.value.trim(); state.rec.page = 1; drawRecords(); }, 250));
+    Admin.$('#rcRefresh').addEventListener('click', loadRecords);
+  }
+
+  async function loadRecords() {
+    const ids = state.rec.templateId === 'all' ? state.templates.map((t) => t.id) : [Number(state.rec.templateId)];
+    Admin.$('#rcTable').innerHTML = '<div class="empty-state">加载中…</div>';
+    const lists = await Promise.all(ids.map((id) => api(`${BASE}/templates/${id}/records`)));
+    state.rec.rows = [].concat(...lists).sort((a, b) => b.id - a.id);
+    drawRecords();
+  }
+
+  function drawRecords() {
+    const r = state.rec;
+    const kw = r.keyword.toLowerCase();
+    const rows = r.rows.filter((x) => (!r.status || x.status === r.status) &&
+      (!kw || String(x.user_id) === kw || (x.nickname || '').toLowerCase().includes(kw) || (x.dev_account || '').toLowerCase().includes(kw)));
+    const slice = rows.slice((r.page - 1) * r.pageSize, r.page * r.pageSize);
+    const tbl = Admin.$('#rcTable');
+    if (!rows.length) { tbl.innerHTML = '<div class="empty-state">没有符合条件的发放记录</div>'; Admin.$('#rcPager').innerHTML = ''; return; }
+    tbl.innerHTML = `<table class="tbl"><thead><tr><th>记录ID</th><th>优惠券</th><th>用户</th><th>状态</th><th>发放时间</th><th>到期时间</th><th>使用 / 回收</th><th>操作</th></tr></thead><tbody>
+      ${slice.map((x) => `<tr>
+        <td class="muted">#${x.id}</td>
+        <td><b>${esc(x.name)}</b><div class="sm-text muted">${esc(x.description)}</div></td>
+        <td>${esc(x.nickname || '(未设置昵称)')}<div class="sm-text muted">#${x.user_id} · ${esc(x.dev_account || '')}</div></td>
+        <td>${badge(x.status_text, STATUS_COLOR[x.status])}</td>
+        <td class="sm-text">${esc(x.issued_at || '')}</td>
+        <td class="sm-text">${esc(x.expire_at || '')}</td>
+        <td class="sm-text">${x.status === 'used' ? `${esc(x.used_at || '')}${x.used_order_id ? '<div class="muted">订单#' + x.used_order_id + '</div>' : ''}` : x.status === 'revoked' ? `${esc(x.revoked_at || '')}<div class="muted">${esc(x.revoke_reason)}</div>` : '-'}</td>
+        <td>${x.status === 'unused' ? `<button class="btn sm danger" data-revoke="${x.id}">回收</button>` : '-'}</td>
+      </tr>`).join('')}</tbody></table>`;
+    Admin.$$('[data-revoke]', tbl).forEach((b) => b.addEventListener('click', () => revoke(r.rows.find((x) => x.id === Number(b.dataset.revoke)))));
+    renderPager(Admin.$('#rcPager'), { page: r.page, pageSize: r.pageSize, total: rows.length }, (p) => { r.page = p; drawRecords(); });
+  }
+
+  async function revoke(x) {
+    const ok = await confirmBox({
+      title: '回收优惠券',
+      message: `确定回收用户「${x.nickname || ('#' + x.user_id)}」的「${x.name}」吗？回收后用户将无法使用，且不可恢复。`,
+      danger: true, okText: '继续'
+    });
+    if (!ok) return;
+    const res = await formBox({
+      title: '回收原因', width: 440, okText: '确认回收', danger: true,
+      fields: [{ name: 'reason', label: '回收原因', type: 'textarea', required: true, full: true, placeholder: '如：发错对象 / 活动结束 / 违规领取', maxlength: 100 }],
+      submit: async (v) => { await act(`${BASE}/${x.id}/revoke`, 'POST', { reason: v.reason }, '已回收'); }
+    });
+    if (res) { loadRecords(); loadTemplates(); }
+  }
+
+  await loadTemplates();
+});
 </script>
 </body>
 </html>

@@ -3,124 +3,70 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>管理后台</title>
+<title>数据统计</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="app">
-  <!-- 登录框 -->
-  <div id="loginBox" class="login-box">
-    <h2>管理后台登录</h2>
-    <input id="loginUsername" placeholder="用户名" value="admin">
-    <input id="loginPassword" placeholder="密码" type="password">
-    <button onclick="doLogin()">登录</button>
-    <p id="loginMsg" class="msg"></p>
-  </div>
-
-  <!-- 登录后的主界面 -->
-  <div id="mainBox" style="display:none;">
-    <header>
-      <h1>小程序运营后台</h1>
-      <div>
-        <span id="whoami"></span>
-        <button class="ghost" onclick="logout()">退出登录</button>
-      </div>
-    </header>
-
-<nav>
-
-  <!-- 数据统计 -->
-  <a href="index.html" class="active">
-    📊 数据统计
-  </a>
-
-  <!-- 商品管理 -->
-  <a href="foods.html">
-    🍜 菜品管理
-  </a>
-
-  <a href="categories.html">
-    📂 分类管理
-  </a>
-
-  <!-- 交易管理 -->
-  <a href="orders.html">
-    📦 订单管理
-  </a>
-
-  <a href="users.html">
-    👥 用户管理
-  </a>
-
-  <!-- 内容管理 -->
-  <a href="messages.html">
-    💬 留言管理
-  </a>
-
-  <a href="polls.html">
-    🗳️ 投票管理
-  </a>
-
-  <a href="notices.html">
-    📢 公告管理
-  </a>
-
-  <a href="comments.html">
-    ⭐ 评论管理
-  </a>
-
-  <!-- 营销管理 -->
-  <a href="coupons.html">
-    🎫 优惠券管理
-  </a>
-
-  <!-- 配送 -->
-  <a href="delivery.html">
-    🚚 配送地址/区域
-  </a>
-
-  <!-- 资金与售后 -->
-  <a href="wallet.html">
-    💰 钱包管理
-  </a>
-
-  <a href="refunds.html">
-    💸 退款审核
-  </a>
-
-  <a href="complaints.html">
-    📢 投诉管理
-  </a>
-
-  <!-- 系统 -->
-  <a href="settings.html">
-    ⚙️ 系统设置
-  </a>
-
-</nav>
-
-    <main>
-      <h2>数据总览</h2>
-      <div class="cards">
-        <div class="card"><div class="num" id="userCount">-</div><div class="label">注册用户数</div></div>
-        <div class="card warn"><div class="num" id="pendingComplaints">-</div><div class="label">待处理投诉</div></div>
-        <div class="card warn"><div class="num" id="pendingRefunds">-</div><div class="label">待审核退款</div></div>
-        <div class="card"><div class="num" id="totalBalance">-</div><div class="label">钱包总余额（元）</div></div>
-      </div>
-      <p class="tip">提示：这套后台是过渡方案，等你申请到个体工商户、接入微信支付后，"钱包退款"这条通道可以继续保留用于人工退款/补偿场景，正常交易走微信支付原生退款即可。</p>
-    </main>
-  </div>
-</div>
+<div id="app"></div>
 <script src="app.js"></script>
 <script>
-async function loadDashboard() {
-  const data = await api('/api/admin/dashboard');
-  document.getElementById('userCount').textContent = data.userCount;
-  document.getElementById('pendingComplaints').textContent = data.pendingComplaints;
-  document.getElementById('pendingRefunds').textContent = data.pendingRefunds;
-  document.getElementById('totalBalance').textContent = (data.totalWalletBalance / 100).toFixed(2);
-}
-initPage(loadDashboard);
+Admin.init({ key: 'dashboard', title: '数据统计' }, async (body, ctx) => {
+  const { esc, yuan, num } = Admin;
+  ctx.setActions('<button class="btn ghost" id="reloadBtn">刷新</button>');
+  document.getElementById('reloadBtn').onclick = () => load();
+
+  async function load() {
+    const s = await Admin.api('/api/admin/stats');
+    const todo = s.todo || {};
+    const daily = (s.daily || []).slice().sort((a, b) => String(a.day).localeCompare(String(b.day)));
+    const maxRev = Math.max(1, ...daily.map(d => Number(d.revenue) || 0));
+    const maxOrd = Math.max(1, ...daily.map(d => Number(d.orders) || 0));
+    const dist = (s.status_distribution || []).filter(x => x.count > 0);
+    const maxDist = Math.max(1, ...dist.map(x => x.count));
+    const tops = s.top_foods || [];
+    const maxTop = Math.max(1, ...tops.map(x => x.sales));
+
+    const card = (label, n, sub, cls, href) =>
+      `<div class="stat ${cls || ''} ${href ? 'link' : ''}" ${href ? `data-href="${href}"` : ''}><div class="num">${n}</div><div class="label">${label}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+    const sub = (p) => `营业额 ${yuan(p.revenue)}`;
+    const bars = (key, max, fmt) => daily.length ? `<div class="bars">${daily.map(d => {
+      const v = Number(d[key]) || 0;
+      return `<div class="bar-col"><div class="bar-val">${fmt(v)}</div><div class="bar" style="height:${Math.round(v / max * 120)}px"></div><div class="bar-label">${esc(String(d.day).slice(5))}</div></div>`;
+    }).join('')}</div>` : '<div class="empty-state">暂无数据</div>';
+
+    body.innerHTML = `
+      <h3 style="margin:0 0 10px">待办事项</h3>
+      <div class="stat-grid">
+        ${card('待接单', num(todo.wait_accept), '点击去处理', todo.wait_accept ? 'warn' : '', 'orders.html?status=paid')}
+        ${card('已接单 / 制作中', num(todo.cooking), '点击查看', '', 'orders.html?status=accepted')}
+        ${card('配送中', num(todo.delivering), '', '', 'orders.html?status=delivery')}
+        ${card('待审核退款', num(todo.pending_refunds), '', todo.pending_refunds ? 'warn' : '', 'refunds.html')}
+        ${card('待处理投诉', num(todo.pending_complaints), '', todo.pending_complaints ? 'warn' : '', 'complaints.html')}
+      </div>
+      <h3 style="margin:0 0 10px">经营数据</h3>
+      <div class="stat-grid">
+        ${card('今日订单', num(s.today.orders), sub(s.today))}
+        ${card('近 7 天订单', num(s.week.orders), sub(s.week))}
+        ${card('近 30 天订单', num(s.month.orders), sub(s.month))}
+        ${card('累计订单', num(s.total.orders), sub(s.total))}
+        ${card('用户总数', num(s.users.total), `今日新增 ${num(s.users.today_new)}`)}
+        ${card('钱包余额总额', yuan(s.wallet_total), '平台应付用户余额')}
+      </div>
+      <div class="grid-2">
+        <div class="card"><h3>近期营业额（元）</h3>${bars('revenue', maxRev, v => v.toFixed(v % 1 ? 1 : 0))}</div>
+        <div class="card"><h3>近期订单数</h3>${bars('orders', maxOrd, v => v)}</div>
+      </div>
+      <div class="grid-2">
+        <div class="card"><h3>热销菜品 TOP</h3>${tops.length ? tops.map(t => `
+          <div class="hbar"><div class="name" title="${esc(t.name)}">${esc(t.name)}</div><div class="track"><div class="fill" style="width:${t.sales / maxTop * 100}%"></div></div><div class="val">${num(t.sales)} 份</div></div>`).join('') : '<div class="empty-state">暂无销量数据</div>'}
+          <div style="text-align:right"><a href="foods.html">查看销量排行 →</a></div></div>
+        <div class="card"><h3>订单状态分布</h3>${dist.length ? dist.map(t => `
+          <div class="hbar"><div class="name">${esc(t.text)}</div><div class="track"><div class="fill" style="width:${t.count / maxDist * 100}%"></div></div><div class="val">${num(t.count)}</div></div>`).join('') : '<div class="empty-state">暂无订单</div>'}</div>
+      </div>`;
+    Admin.$$('[data-href]', body).forEach(el => el.onclick = () => { location.href = el.dataset.href; });
+  }
+  await load();
+});
 </script>
 </body>
 </html>

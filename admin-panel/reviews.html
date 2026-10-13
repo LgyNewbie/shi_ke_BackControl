@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>评论管理</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="app.js"></script>
+<script>
+Admin.init({ key: 'reviews', title: '评论管理' }, async (main) => {
+  const { api, act, esc, badge, confirmBox, formBox, renderPager, debounce, $ } = Admin;
+  const state = { page: 1, pageSize: 15, total: 0, keyword: '', status: '', rating: '', unreplied: '' };
+  let rows = [];
+
+  main.innerHTML = `
+    <div class="toolbar">
+      <input type="search" id="kw" placeholder="搜索评价内容 / 昵称 / 菜品 / 订单号">
+      <select id="st"><option value="">全部状态</option><option value="normal">正常显示</option><option value="hidden">已隐藏</option></select>
+      <select id="rt"><option value="">全部评分</option>${[5, 4, 3, 2, 1].map((n) => `<option value="${n}">${n} 星</option>`).join('')}</select>
+      <label class="check"><input type="checkbox" id="un"> 只看未回复</label>
+      <button class="btn ghost" id="reload">刷新</button>
+    </div>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr><th>用户</th><th>菜品 / 订单</th><th>评分</th><th>评价内容</th><th>商家回复</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+    <div id="pager"></div>`;
+
+  const stars = (n) => `<span style="color:#e8a30c;white-space:nowrap">${'★'.repeat(n)}<span style="color:#d5dae0">${'★'.repeat(5 - n)}</span></span>`;
+
+  async function load() {
+    const res = await api('/api/admin/reviews', {
+      raw: true,
+      query: { page: state.page, pageSize: state.pageSize, keyword: state.keyword, status: state.status, rating: state.rating, unreplied: state.unreplied }
+    });
+    rows = res.data || [];
+    state.total = res.total || 0;
+    $('#tb').innerHTML = rows.length ? rows.map((r) => `
+      <tr>
+        <td>${esc(r.nickname || '用户')}<div class="muted sm-text">#${r.user_id}</div></td>
+        <td>${esc(r.food_name || '-')}<div class="muted sm-text mono">${esc(r.order_no || '')}</div></td>
+        <td>${stars(r.rating)}</td>
+        <td style="max-width:260px"><div class="pre">${esc(r.content) || '<span class="muted">（无文字）</span>'}</div>
+          ${r.images && r.images.length ? `<div class="img-row" style="margin-top:6px">${r.images.map((u) => `<a href="${esc(u)}" target="_blank"><img style="width:44px;height:44px" src="${esc(u)}" alt=""></a>`).join('')}</div>` : ''}</td>
+        <td style="max-width:220px">${r.reply ? `<div class="pre">${esc(r.reply)}</div><div class="muted sm-text">${esc(r.replied_at || '')}</div>` : badge('未回复', 'orange')}</td>
+        <td>${r.status === 'hidden' ? badge('已隐藏', 'gray') : badge('正常', 'green')}</td>
+        <td class="sm-text">${esc(r.created_at)}</td>
+        <td><div class="row-actions">
+          <button class="btn sm blue" data-act="reply" data-id="${r.id}">${r.reply ? '修改回复' : '回复'}</button>
+          <button class="btn sm warn" data-act="toggle" data-id="${r.id}">${r.status === 'hidden' ? '恢复' : '隐藏'}</button>
+          <button class="btn sm danger" data-act="del" data-id="${r.id}">删除</button>
+        </div></td>
+      </tr>`).join('') : '<tr><td colspan="8" class="empty-state">暂无评价</td></tr>';
+    renderPager($('#pager'), state, (p) => { state.page = p; load(); });
+  }
+
+  $('#tb').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const r = rows.find((x) => x.id === Number(b.dataset.id));
+    if (!r) return;
+    if (b.dataset.act === 'reply') {
+      const v = await formBox({
+        title: `回复评价 #${r.id}`, okText: '提交回复', width: 480,
+        fields: [
+          { name: 'ori', label: '用户评价', type: 'textarea', value: r.content, rows: 2, full: true },
+          { name: 'reply', label: '回复内容', type: 'textarea', value: r.reply, rows: 4, required: true, full: true, maxlength: 300, hint: '最多 300 字，将显示在用户评价下方' }
+        ],
+        submit: (v) => act(`/api/admin/reviews/${r.id}/reply`, 'POST', { reply: v.reply }, '回复成功')
+      });
+      if (v) load();
+    } else if (b.dataset.act === 'toggle') {
+      const hide = r.status !== 'hidden';
+      const ok = await confirmBox({
+        title: hide ? '隐藏评价' : '恢复评价',
+        message: hide ? '隐藏后用户端将不再显示这条评价，确定隐藏吗？' : '确定恢复显示这条评价吗？',
+        danger: hide, okText: hide ? '确认隐藏' : '确认恢复'
+      });
+      if (ok) { await act(`/api/admin/reviews/${r.id}/status`, 'POST', {}); load(); }
+    } else if (b.dataset.act === 'del') {
+      const ok = await confirmBox({ title: '删除评价', message: `确定永久删除用户「${r.nickname || r.user_id}」对「${r.food_name || '该菜品'}」的评价吗？\n删除后无法恢复，用户也无法重新评价。`, danger: true, okText: '确认删除' });
+      if (ok) { await act(`/api/admin/reviews/${r.id}`, 'DELETE'); load(); }
+    }
+  });
+  // 评价原文只读展示
+  document.addEventListener('focusin', (e) => { if (e.target.id === 'f_ori') e.target.readOnly = true; });
+
+  $('#kw').addEventListener('input', debounce((e) => { state.keyword = e.target.value.trim(); state.page = 1; load(); }, 350));
+  $('#st').addEventListener('change', (e) => { state.status = e.target.value; state.page = 1; load(); });
+  $('#rt').addEventListener('change', (e) => { state.rating = e.target.value; state.page = 1; load(); });
+  $('#un').addEventListener('change', (e) => { state.unreplied = e.target.checked ? '1' : ''; state.page = 1; load(); });
+  $('#reload').addEventListener('click', load);
+  await load();
+});
+</script>
+</body>
+</html>

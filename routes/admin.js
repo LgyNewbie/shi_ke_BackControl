@@ -1,115 +1,207 @@
+// 后台：用户管理、数据统计、操作日志、留言管理。金额均为「元」。
 const express = require('express');
 const db = require('../db/init');
 const { requireAdmin } = require('../middleware/auth');
+const { fenToYuan } = require('../services/money');
+const { fixImage, fixImages } = require('../services/url');
+const svc = require('../services/orders');
 
 const router = express.Router();
+const { wrap, BizError } = svc;
+const PAID_SQL = "('paid','accepted','cooking','delivery','ready','completed')";
 
+// =========================
+// 用户管理
+// =========================
+router.get('/users', requireAdmin, wrap((req, res) => {
+  const { keyword, status } = req.query;
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));
+  const where = [];
+  const params = [];
+  if (keyword && String(keyword).trim()) {
+    const k = `%${String(keyword).trim()}%`;
+    where.push('(u.nickname LIKE ? OR u.dev_account LIKE ? OR u.phone LIKE ? OR CAST(u.id AS TEXT) = ?)');
+    params.push(k, k, k, String(keyword).trim());
+  }
+  if (status === 'normal' || status === 'blocked') { where.push('u.status = ?'); params.push(status); }
+  const w = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  const total = db.prepare(`SELECT COUNT(*) c FROM users u ${w}`).get(...params).c;
+  const rows = db.prepare(
+    `SELECT u.id, u.nickname, u.dev_account, u.phone, u.avatar, u.status, u.created_at, u.last_login_at,
+       (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) AS order_count,
+       (SELECT COALESCE(SUM(o.amount - o.refunded_amount),0) FROM orders o WHERE o.user_id = u.id AND o.status IN ${PAID_SQL}) AS spent,
+       (SELECT COALESCE(w.balance,0) FROM wallets w WHERE w.user_id = u.id) AS balance,
+       (SELECT COUNT(*) FROM user_coupons uc WHERE uc.user_id = u.id AND uc.status = 'unused' AND uc.expire_at >= datetime('now','localtime')) AS coupon_count
+     FROM users u ${w} ORDER BY u.id DESC LIMIT ? OFFSET ?`
+  ).all(...params, pageSize, (page - 1) * pageSize);
+  res.json({
+    code: 0,
+    data: rows.map(r => ({ ...r, avatar: fixImage(req, r.avatar), spent: fenToYuan(r.spent), balance: fenToYuan(r.balance) })),
+    total, page, pageSize
+  });
+}));
 
-// 用户管理：查看用户详情
-router.get('/users/:id/detail', requireAdmin, (req, res) => {
+router.get('/users/:id/detail', requireAdmin, wrap((req, res) => {
   const userId = Number(req.params.id);
+  const user = db.prepare(
+    'SELECT id, nickname, dev_account, phone, avatar, status, created_at, last_login_at FROM users WHERE id = ?'
+  ).get(userId);
+  if (!user) throw new BizError('用户不存在', 404);
+  user.avatar = fixImage(req, user.avatar);
 
-  if (!userId) {
-    return res.status(400).json({
-      code: 400,
-      message: '用户 ID 无效'
+  const one = (sql) => db.prepare(sql).get(userId).c;
+  const orderCount = one('SELECT COUNT(*) c FROM orders WHERE user_id = ?');
+  const complaintCount = one('SELECT COUNT(*) c FROM complaints WHERE user_id = ?');
+  const messageCount = one('SELECT COUNT(*) c FROM messages WHERE user_id = ?');
+  const favoriteCount = one('SELECT COUNT(*) c FROM favorites WHERE user_id = ?');
+  const spent = one(`SELECT COALESCE(SUM(amount - refunded_amount),0) c FROM orders WHERE user_id = ? AND status IN ${PAID_SQL}`);
+  const wallet = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(userId);
+
+  const orders = db.prepare('SELECT * FROM orders WHERE user_id = ? ORDER BY id DESC LIMIT 10').all(userId)
+    .map(o => {
+      const v = svc.orderView(o);
+      return { id: v.id, order_no: v.order_no, title: v.title, amount: v.amount, status: v.status, status_text: v.status_text, created_at: v.created_at };
     });
-  }
-
-  const user = db.prepare(`
-    SELECT
-      id,
-      nickname,
-      dev_account,
-      created_at
-    FROM users
-    WHERE id = ?
-  `).get(userId);
-
-  if (!user) {
-    return res.status(404).json({
-      code: 404,
-      message: '用户不存在'
-    });
-  }
-
-  const orderCount = db.prepare(`
-    SELECT COUNT(*) AS count
-    FROM orders
-    WHERE user_id = ?
-  `).get(userId).count;
-
-  const complaintCount = db.prepare(`
-    SELECT COUNT(*) AS count
-    FROM complaints
-    WHERE user_id = ?
-  `).get(userId).count;
-
-  let wallet = db.prepare(`
-    SELECT *
-    FROM wallets
-    WHERE user_id = ?
-    LIMIT 1
-  `).get(userId);
+  const addresses = db.prepare(
+    `SELECT ua.*, da.name AS area_name FROM user_addresses ua LEFT JOIN delivery_areas da ON da.id = ua.area_id
+     WHERE ua.user_id = ? ORDER BY ua.is_default DESC, ua.id DESC`
+  ).all(userId);
 
   res.json({
     code: 0,
     data: {
       user,
-      orderCount,
-      complaintCount,
-      wallet
+      orderCount, complaintCount, messageCount, favoriteCount,
+      spent: fenToYuan(spent),
+      wallet: wallet ? { balance: fenToYuan(wallet.balance), updated_at: wallet.updated_at } : { balance: 0 },
+      orders, addresses
     }
   });
-});
+}));
 
-// 首页统计数字
-router.get('/dashboard', requireAdmin, (req, res) => {
-  const userCount = db.prepare('SELECT COUNT(*) c FROM users').get().c;
-  const pendingComplaints = db.prepare('SELECT COUNT(*) c FROM complaints WHERE status = \'pending\'').get().c;
-  const pendingRefunds = db.prepare('SELECT COUNT(*) c FROM refunds WHERE status = \'pending_review\'').get().c;
-  const totalWalletBalance = db.prepare('SELECT COALESCE(SUM(balance),0) s FROM wallets').get().s;
-  res.json({
-    code: 0,
-    data: { userCount, pendingComplaints, pendingRefunds, totalWalletBalance }
-  });
-});
+router.post('/users/:id/status', requireAdmin, wrap((req, res) => {
+  const id = Number(req.params.id);
+  const { status } = req.body || {};
+  if (!['normal', 'blocked'].includes(status)) throw new BizError('状态不正确');
+  if (!db.prepare('SELECT id FROM users WHERE id = ?').get(id)) throw new BizError('用户不存在', 404);
+  db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, id);
+  res.json({ code: 0, message: status === 'blocked' ? '已禁用该用户（不能登录、下单）' : '已恢复该用户' });
+}));
 
-// 用户管理：获取用户列表
-router.get('/users', requireAdmin, (req, res) => {
-  const { keyword } = req.query;
+// =========================
+// 数据统计
+// =========================
+function sumPaid(sinceExpr) {
+  const r = db.prepare(
+    `SELECT COUNT(*) AS orders, COALESCE(SUM(amount - refunded_amount), 0) AS revenue
+     FROM orders WHERE status IN ${PAID_SQL} AND paid_at >= ${sinceExpr}`
+  ).get();
+  return { orders: r.orders, revenue: fenToYuan(r.revenue) };
+}
 
-  let sql = `
-    SELECT
-      id,
-      nickname,
-      dev_account,
-      created_at
-    FROM users
-  `;
+router.get('/stats', requireAdmin, wrap((req, res) => {
+  svc.cancelExpiredOrders();
+  const today = sumPaid("date('now','localtime')");
+  const week = sumPaid("date('now','localtime','-6 days')");
+  const month = sumPaid("date('now','localtime','-29 days')");
+  const total = db.prepare(
+    `SELECT COUNT(*) AS orders, COALESCE(SUM(amount - refunded_amount),0) AS revenue FROM orders WHERE status IN ${PAID_SQL}`
+  ).get();
 
-  const params = [];
+  const statusRows = db.prepare('SELECT status, COUNT(*) c FROM orders GROUP BY status').all();
+  const status_distribution = statusRows.map(r => ({ status: r.status, text: svc.STATUS_TEXT[r.status] || r.status, count: r.c }));
 
-  if (keyword) {
-    sql += `
-      WHERE nickname LIKE ?
-         OR dev_account LIKE ?
-    `;
-
-    params.push(`%${keyword}%`, `%${keyword}%`);
+  // 近 7 天每天订单数/营业额/新增用户
+  const daily = [];
+  for (let i = 6; i >= 0; i--) {
+    const day = db.prepare("SELECT date('now','localtime', ?) AS d").get(`-${i} days`).d;
+    const o = db.prepare(
+      `SELECT COUNT(*) AS orders, COALESCE(SUM(amount - refunded_amount),0) AS revenue
+       FROM orders WHERE status IN ${PAID_SQL} AND date(paid_at) = ?`
+    ).get(day);
+    const u = db.prepare('SELECT COUNT(*) c FROM users WHERE date(created_at) = ?').get(day).c;
+    daily.push({ day, orders: o.orders, revenue: fenToYuan(o.revenue), new_users: u });
   }
 
-  sql += ` ORDER BY id DESC`;
+  const top_foods = db.prepare(
+    `SELECT oi.name, SUM(oi.count) AS qty, SUM(oi.discount_price * oi.count) AS revenue
+     FROM order_items oi JOIN orders o ON o.id = oi.order_id
+     WHERE o.status IN ${PAID_SQL} AND o.paid_at >= date('now','localtime','-6 days')
+     GROUP BY COALESCE(oi.food_id, oi.name) ORDER BY qty DESC LIMIT 5`
+  ).all().map(r => ({ name: r.name, sales: r.qty, revenue: fenToYuan(r.revenue) }));
 
-  const list = db.prepare(sql).all(...params);
-
+  const c = sql => db.prepare(sql).get().c;
   res.json({
     code: 0,
-    data: list
+    data: {
+      today, week, month,
+      total: { orders: total.orders, revenue: fenToYuan(total.revenue) },
+      users: {
+        total: c('SELECT COUNT(*) c FROM users'),
+        today_new: c("SELECT COUNT(*) c FROM users WHERE date(created_at) = date('now','localtime')")
+      },
+      todo: {
+        wait_accept: c("SELECT COUNT(*) c FROM orders WHERE status = 'paid'"),
+        cooking: c("SELECT COUNT(*) c FROM orders WHERE status IN ('accepted','cooking')"),
+        delivering: c("SELECT COUNT(*) c FROM orders WHERE status IN ('delivery','ready')"),
+        pending_refunds: c("SELECT COUNT(*) c FROM refunds WHERE status = 'pending_review'"),
+        pending_complaints: c("SELECT COUNT(*) c FROM complaints WHERE status = 'pending'")
+      },
+      wallet_total: fenToYuan(c('SELECT COALESCE(SUM(balance),0) c FROM wallets')),
+      status_distribution, daily, top_foods
+    }
   });
-});
+}));
 
+// 兼容旧首页
+router.get('/dashboard', requireAdmin, wrap((req, res) => {
+  const c = sql => db.prepare(sql).get().c;
+  res.json({
+    code: 0,
+    data: {
+      userCount: c('SELECT COUNT(*) c FROM users'),
+      pendingComplaints: c("SELECT COUNT(*) c FROM complaints WHERE status = 'pending'"),
+      pendingRefunds: c("SELECT COUNT(*) c FROM refunds WHERE status = 'pending_review'"),
+      totalWalletBalance: fenToYuan(c('SELECT COALESCE(SUM(balance),0) c FROM wallets'))
+    }
+  });
+}));
 
+// =========================
+// 操作日志
+// =========================
+router.get('/logs', requireAdmin, wrap((req, res) => {
+  const { module, admin, keyword, result, from, to } = req.query;
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const pageSize = Math.min(200, Math.max(1, Number(req.query.pageSize) || 20));
+  const where = [];
+  const params = [];
+  if (module) { where.push('module = ?'); params.push(module); }
+  if (admin) { where.push('admin_username = ?'); params.push(admin); }
+  if (result) { where.push('result = ?'); params.push(result); }
+  if (from) { where.push('date(created_at) >= date(?)'); params.push(from); }
+  if (to) { where.push('date(created_at) <= date(?)'); params.push(to); }
+  if (keyword && String(keyword).trim()) {
+    where.push('(detail LIKE ? OR action LIKE ? OR path LIKE ? OR target = ?)');
+    const k = `%${String(keyword).trim()}%`;
+    params.push(k, k, k, String(keyword).trim());
+  }
+  const w = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  const total = db.prepare(`SELECT COUNT(*) c FROM admin_logs ${w}`).get(...params).c;
+  const rows = db.prepare(`SELECT * FROM admin_logs ${w} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...params, pageSize, (page - 1) * pageSize);
+  const modules = db.prepare('SELECT DISTINCT module FROM admin_logs ORDER BY module').all().map(r => r.module);
+  const admins = db.prepare('SELECT DISTINCT admin_username FROM admin_logs ORDER BY admin_username').all().map(r => r.admin_username);
+  res.json({ code: 0, data: rows, total, page, pageSize, modules, admins });
+}));
+
+// 清理 N 天前的日志（本次清理操作本身也会被记录）
+router.post('/logs/clear', requireAdmin, wrap((req, res) => {
+  const days = Math.floor(Number((req.body || {}).days));
+  if (!(days >= 7)) throw new BizError('只能清理 7 天以前的日志');
+  const r = db.prepare("DELETE FROM admin_logs WHERE created_at < datetime('now','localtime', ?)").run(`-${days} days`);
+  res.json({ code: 0, message: `已清理 ${r.changes} 条日志` });
+}));
 
 // =========================
 // 商家后台：留言管理
@@ -375,732 +467,25 @@ router.post('/messages/:id/comments', requireAdmin, (req, res) => {
     message: '回复成功'
   });
 });
-// =========================
-// 商家后台：查询订单
-// =========================
 
-router.get('/orders', requireAdmin, (req, res) => {
-
-  const { status, keyword } = req.query;
-
-  let sql = `
-    SELECT
-      o.id,
-      o.user_id,
-      u.nickname,
-      u.dev_account,
-      o.title,
-      o.amount,
-      o.status,
-      o.created_at,
-      o.paid_at,
-      o.cancelled_at
-    FROM orders o
-    LEFT JOIN users u ON u.id = o.user_id
-  `;
-
-  const params = [];
-
-  // 如果选择了状态，则只查询对应状态
-const conditions = [];
-
-if (status) {
-  conditions.push(`o.status = ?`);
-  params.push(status);
-}
-
-if (keyword) {
-  if (/^\d+$/.test(keyword)) {
-    conditions.push(`(
-      o.id = ?
-      OR u.nickname LIKE ?
-    )`);
-    params.push(Number(keyword), `%${keyword}%`);
-  } else {
-    conditions.push(`u.nickname LIKE ?`);
-    params.push(`%${keyword}%`);
-  }
-}
-
-if (conditions.length > 0) {
-  sql += ` WHERE ` + conditions.join(' AND ');
-}
-
-  sql += ` ORDER BY o.id DESC`;
-
-  const list = db.prepare(sql).all(...params);
-
-  res.json({
-    code: 0,
-    data: list
-  });
-
-});
-
-
-// =========================
-// 商家后台：订单接单
-// =========================
-
-router.post('/orders/:id/accept', requireAdmin, (req, res) => {
-
-  const orderId = Number(req.params.id);
-
-  const order = db.prepare(
-    `SELECT id, status FROM orders WHERE id = ?`
-  ).get(orderId);
-
-  if (!order) {
-    return res.status(404).json({
-      code: 404,
-      message: '订单不存在'
-    });
-  }
-
-  if (order.status !== 'paid') {
-    return res.status(400).json({
-      code: 400,
-      message: '只有已支付订单才能接单'
-    });
-  }
-
-  db.prepare(
-    `UPDATE orders
-     SET status = 'accepted'
-     WHERE id = ?`
-  ).run(orderId);
-
-  res.json({
-    code: 0,
-    message: '接单成功'
-  });
-
-});
-
-
-// =========================
-// 商家后台：订单开始制作
-// =========================
-
-router.post('/orders/:id/cooking', requireAdmin, (req, res) => {
-
-  const orderId = Number(req.params.id);
-
-  const order = db.prepare(
-    `SELECT id, status FROM orders WHERE id = ?`
-  ).get(orderId);
-
-  if (!order) {
-    return res.status(404).json({
-      code: 404,
-      message: '订单不存在'
-    });
-  }
-
-  if (order.status !== 'accepted') {
-    return res.status(400).json({
-      code: 400,
-      message: '只有商家已接单的订单才能开始制作'
-    });
-  }
-
-  db.prepare(
-    `UPDATE orders
-     SET status = 'cooking'
-     WHERE id = ?`
-  ).run(orderId);
-
-  res.json({
-    code: 0,
-    message: '已开始制作'
-  });
-
-});
-
-
-// =========================
-// 商家后台：订单进入配送
-// =========================
-
-router.post('/orders/:id/delivery', requireAdmin, (req, res) => {
-
-  const orderId = Number(req.params.id);
-
-  const order = db.prepare(
-    `SELECT id, status FROM orders WHERE id = ?`
-  ).get(orderId);
-
-  if (!order) {
-    return res.status(404).json({
-      code: 404,
-      message: '订单不存在'
-    });
-  }
-
-  if (order.status !== 'cooking') {
-    return res.status(400).json({
-      code: 400,
-      message: '只有制作中的订单才能进入配送'
-    });
-  }
-
-  db.prepare(
-    `UPDATE orders
-     SET status = 'delivery'
-     WHERE id = ?`
-  ).run(orderId);
-
-  res.json({
-    code: 0,
-    message: '订单已进入配送'
-  });
-
-});
-
-
-// =========================
-// 商家后台：完成订单
-// =========================
-
-router.post('/orders/:id/complete', requireAdmin, (req, res) => {
-
-  const orderId = Number(req.params.id);
-
-  const order = db.prepare(
-    `SELECT id, status FROM orders WHERE id = ?`
-  ).get(orderId);
-
-  if (!order) {
-    return res.status(404).json({
-      code: 404,
-      message: '订单不存在'
-    });
-  }
-
-  if (order.status !== 'delivery') {
-    return res.status(400).json({
-      code: 400,
-      message: '只有配送中的订单才能完成'
-    });
-  }
-
-  db.prepare(
-    `UPDATE orders
-     SET status = 'completed'
-     WHERE id = ?`
-  ).run(orderId);
-
-  res.json({
-    code: 0,
-    message: '订单已完成'
-  });
-
-});
-
-// =========================
-// 商家后台：订单详情
-// =========================
-
-router.get('/orders/:id/detail', requireAdmin, (req, res) => {
-
-  const orderId = Number(req.params.id);
-
-  if (!orderId) {
-    return res.status(400).json({
-      code: 400,
-      message: '订单 ID 无效'
-    });
-  }
-
-  // 查询订单
-  const order = db.prepare(`
-    SELECT
-      o.*,
-      u.nickname,
-      u.dev_account
-    FROM orders o
-    LEFT JOIN users u ON u.id = o.user_id
-    WHERE o.id = ?
-  `).get(orderId);
-
-  if (!order) {
-    return res.status(404).json({
-      code: 404,
-      message: '订单不存在'
-    });
-  }
-
-  // 查询这个订单对应的投诉
-  const complaints = db.prepare(`
-    SELECT
-      c.id,
-      c.order_id,
-      c.type,
-      c.content,
-      c.images,
-      c.status,
-      c.handler,
-      c.handle_remark,
-      c.refund_id,
-      c.created_at,
-      c.updated_at
-    FROM complaints c
-    WHERE c.order_id = ?
-    ORDER BY c.id DESC
-  `).all(orderId);
-
-  const complaintList = complaints.map(item => {
-
-    let images = [];
-    
-    try {
-      images = JSON.parse(item.images || '[]');
-    } catch (error) {
-      images = [];
-    }
-    
-    return {
-      ...item,
-      images
-    };
-
-  });
-
-  res.json({
-    code: 0,
-
-    data: {
-      order,
-      complaints: complaintList
-    }
-  });
-
-});
-// ==================================================
-// 菜品分类管理
-// ==================================================
-
-// 获取全部分类
-router.get('/categories', requireAdmin, (req, res) => {
-
-  const list = db.prepare(`
-    SELECT
-      id,
-      name,
-      sort_order,
-      status,
-      created_at,
-      updated_at
-    FROM food_categories
-    ORDER BY sort_order ASC, id ASC
-  `).all();
-
-  res.json({
-    code: 0,
-    data: list
-  });
-
-});
-
-
-// 新增分类
-router.post('/categories', requireAdmin, (req, res) => {
-
-  const { name, sort_order } = req.body;
-
-  if (!name || !name.trim()) {
-    return res.status(400).json({
-      code: 400,
-      message: '请输入分类名称'
-    });
-  }
-
-  const info = db.prepare(`
-    INSERT INTO food_categories (
-      name,
-      sort_order,
-      status
-    )
-    VALUES (?, ?, 'enabled')
-  `).run(
-    name.trim(),
-    Number(sort_order) || 0
-  );
-
-  res.json({
-    code: 0,
-    message: '分类添加成功',
-    data: {
-      id: info.lastInsertRowid
-    }
-  });
-
-});
-
-
-// 修改分类
-router.put('/categories/:id', requireAdmin, (req, res) => {
-
+// 删除留言（连同点赞、评论一起删除）
+router.delete('/messages/:id', requireAdmin, wrap((req, res) => {
   const id = Number(req.params.id);
-  const { name, sort_order } = req.body;
-
-  if (!id) {
-    return res.status(400).json({
-      code: 400,
-      message: '分类 ID 无效'
-    });
-  }
-
-  if (!name || !name.trim()) {
-    return res.status(400).json({
-      code: 400,
-      message: '请输入分类名称'
-    });
-  }
-
-  const category = db.prepare(`
-    SELECT id
-    FROM food_categories
-    WHERE id = ?
-  `).get(id);
-
-  if (!category) {
-    return res.status(404).json({
-      code: 404,
-      message: '分类不存在'
-    });
-  }
-
-  db.prepare(`
-    UPDATE food_categories
-    SET
-      name = ?,
-      sort_order = ?,
-      updated_at = datetime('now', 'localtime')
-    WHERE id = ?
-  `).run(
-    name.trim(),
-    Number(sort_order) || 0,
-    id
-  );
-
-  res.json({
-    code: 0,
-    message: '分类修改成功'
+  if (!db.prepare('SELECT id FROM messages WHERE id = ?').get(id)) throw new BizError('留言不存在', 404);
+  db.withTransaction(() => {
+    db.prepare('DELETE FROM message_likes WHERE message_id = ?').run(id);
+    db.prepare('DELETE FROM message_comments WHERE message_id = ?').run(id);
+    db.prepare('DELETE FROM messages WHERE id = ?').run(id);
   });
+  res.json({ code: 0, message: '留言已删除' });
+}));
 
-});
-
-
-// 启用 / 停用分类
-router.post('/categories/:id/toggle', requireAdmin, (req, res) => {
-
-  const id = Number(req.params.id);
-
-  if (!id) {
-    return res.status(400).json({
-      code: 400,
-      message: '分类 ID 无效'
-    });
-  }
-
-  const category = db.prepare(`
-    SELECT id, status
-    FROM food_categories
-    WHERE id = ?
-  `).get(id);
-
-  if (!category) {
-    return res.status(404).json({
-      code: 404,
-      message: '分类不存在'
-    });
-  }
-
-  const newStatus =
-    category.status === 'enabled'
-      ? 'disabled'
-      : 'enabled';
-
-  db.prepare(`
-    UPDATE food_categories
-    SET
-      status = ?,
-      updated_at = datetime('now', 'localtime')
-    WHERE id = ?
-  `).run(newStatus, id);
-
-  res.json({
-    code: 0,
-    message: newStatus === 'enabled'
-      ? '分类已启用'
-      : '分类已停用',
-    data: {
-      id,
-      status: newStatus
-    }
-  });
-
-});
-
-
-// ==================================================
-// 菜品管理
-// ==================================================
-
-// 获取全部菜品
-router.get('/foods', requireAdmin, (req, res) => {
-
-  const list = db.prepare(`
-    SELECT
-      f.id,
-      f.category_id,
-      c.name AS category_name,
-      f.name,
-      f.price,
-      f.image,
-      f.description,
-      f.status,
-      f.sort_order,
-      f.created_at,
-      f.updated_at
-    FROM foods f
-    LEFT JOIN food_categories c
-      ON c.id = f.category_id
-    ORDER BY
-      f.sort_order ASC,
-      f.id DESC
-  `).all();
-
-  res.json({
-    code: 0,
-    data: list
-  });
-
-});
-
-
-// 新增菜品
-router.post('/foods', requireAdmin, (req, res) => {
-
-  const {
-    category_id,
-    name,
-    price,
-    image,
-    description,
-    sort_order
-  } = req.body;
-
-  if (!name || !name.trim()) {
-    return res.status(400).json({
-      code: 400,
-      message: '请输入菜品名称'
-    });
-  }
-
-  const priceNumber = Number(price);
-
-  if (!Number.isInteger(priceNumber) || priceNumber < 0) {
-    return res.status(400).json({
-      code: 400,
-      message: '菜品价格必须是大于等于 0 的整数（单位：分）'
-    });
-  }
-
-  if (category_id) {
-
-    const category = db.prepare(`
-      SELECT id
-      FROM food_categories
-      WHERE id = ?
-    `).get(Number(category_id));
-    
-    if (!category) {
-      return res.status(400).json({
-        code: 400,
-        message: '选择的分类不存在'
-      });
-    }
-
-  }
-
-  const info = db.prepare(`
-    INSERT INTO foods (
-      category_id,
-      name,
-      price,
-      image,
-      description,
-      status,
-      sort_order
-    )
-    VALUES (?, ?, ?, ?, ?, 'on_sale', ?)
-  `).run(
-    category_id ? Number(category_id) : null,
-    name.trim(),
-    priceNumber,
-    image || '',
-    description || '',
-    Number(sort_order) || 0
-  );
-
-  res.json({
-    code: 0,
-    message: '菜品添加成功',
-    data: {
-      id: info.lastInsertRowid
-    }
-  });
-
-});
-
-
-// 修改菜品
-router.put('/foods/:id', requireAdmin, (req, res) => {
-
-  const id = Number(req.params.id);
-
-  const {
-    category_id,
-    name,
-    price,
-    image,
-    description,
-    sort_order
-  } = req.body;
-
-  if (!id) {
-    return res.status(400).json({
-      code: 400,
-      message: '菜品 ID 无效'
-    });
-  }
-
-  if (!name || !name.trim()) {
-    return res.status(400).json({
-      code: 400,
-      message: '请输入菜品名称'
-    });
-  }
-
-  const priceNumber = Number(price);
-
-  if (!Number.isInteger(priceNumber) || priceNumber < 0) {
-    return res.status(400).json({
-      code: 400,
-      message: '菜品价格必须是大于等于 0 的整数（单位：分）'
-    });
-  }
-
-  const food = db.prepare(`
-    SELECT id
-    FROM foods
-    WHERE id = ?
-  `).get(id);
-
-  if (!food) {
-    return res.status(404).json({
-      code: 404,
-      message: '菜品不存在'
-    });
-  }
-
-  if (category_id) {
-
-    const category = db.prepare(`
-      SELECT id
-      FROM food_categories
-      WHERE id = ?
-    `).get(Number(category_id));
-    
-    if (!category) {
-      return res.status(400).json({
-        code: 400,
-        message: '选择的分类不存在'
-      });
-    }
-
-  }
-
-  db.prepare(`
-    UPDATE foods
-    SET
-      category_id = ?,
-      name = ?,
-      price = ?,
-      image = ?,
-      description = ?,
-      sort_order = ?,
-      updated_at = datetime('now', 'localtime')
-    WHERE id = ?
-  `).run(
-    category_id ? Number(category_id) : null,
-    name.trim(),
-    priceNumber,
-    image || '',
-    description || '',
-    Number(sort_order) || 0,
-    id
-  );
-
-  res.json({
-    code: 0,
-    message: '菜品修改成功'
-  });
-
-});
-
-
-// 上架 / 下架菜品
-router.post('/foods/:id/toggle', requireAdmin, (req, res) => {
-
-  const id = Number(req.params.id);
-
-  if (!id) {
-    return res.status(400).json({
-      code: 400,
-      message: '菜品 ID 无效'
-    });
-  }
-
-  const food = db.prepare(`
-    SELECT id, status
-    FROM foods
-    WHERE id = ?
-  `).get(id);
-
-  if (!food) {
-    return res.status(404).json({
-      code: 404,
-      message: '菜品不存在'
-    });
-  }
-
-  const newStatus =
-    food.status === 'on_sale'
-      ? 'off_sale'
-      : 'on_sale';
-
-  db.prepare(`
-    UPDATE foods
-    SET
-      status = ?,
-      updated_at = datetime('now', 'localtime')
-    WHERE id = ?
-  `).run(newStatus, id);
-
-  res.json({
-    code: 0,
-    message: newStatus === 'on_sale'
-      ? '菜品已上架'
-      : '菜品已下架',
-    data: {
-      id,
-      status: newStatus
-    }
-  });
-
-});
+// 删除单条评论/回复（其下的子回复一并删除）
+router.delete('/messages/comments/:commentId', requireAdmin, wrap((req, res) => {
+  const id = Number(req.params.commentId);
+  if (!db.prepare('SELECT id FROM message_comments WHERE id = ?').get(id)) throw new BizError('评论不存在', 404);
+  db.prepare('DELETE FROM message_comments WHERE id = ? OR parent_id = ?').run(id, id);
+  res.json({ code: 0, message: '评论已删除' });
+}));
 
 module.exports = router;

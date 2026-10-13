@@ -5,1001 +5,300 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>菜品管理</title>
 <link rel="stylesheet" href="style.css">
+<style>
+  .batch-bar { display:flex; gap:8px; align-items:center; background:#eff6ff; border:1px solid #bfdbfe; padding:8px 12px; border-radius:8px; margin-bottom:12px; }
+  .img-up { display:flex; align-items:center; gap:12px; }
+  .img-up .ph { width:88px; height:88px; border-radius:8px; background:#eef1f4; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:12px; overflow:hidden; }
+  .img-up .ph img { width:100%; height:100%; object-fit:cover; }
+  .fee-tag { font-size:12px; color:var(--muted); }
+  .old-price { text-decoration:line-through; color:var(--muted); font-size:12px; margin-right:4px; }
+  .disc-price { color:var(--red); font-weight:600; }
+</style>
 </head>
-
 <body>
-
-<div id="app">
-
-  <!-- =========================
-       登录框
-  ========================== -->
-  <div id="loginBox" class="login-box">
-
-    <h2>管理后台登录</h2>
-
-    <input
-      id="loginUsername"
-      placeholder="用户名"
-      value="admin"
-    >
-
-    <input
-      id="loginPassword"
-      placeholder="密码"
-      type="password"
-    >
-
-    <button onclick="doLogin()">登录</button>
-
-    <p id="loginMsg" class="msg"></p>
-
-  </div>
-
-
-  <!-- =========================
-       主界面
-  ========================== -->
-  <div id="mainBox" style="display:none;">
-
-    <header>
-
-      <h1>小程序运营后台</h1>
-
-      <div>
-        <span id="whoami"></span>
-
-        <button
-          class="ghost"
-          onclick="logout()"
-        >
-          退出登录
-        </button>
-      </div>
-
-    </header>
-
-
-    <!-- =========================
-         左侧菜单
-    ========================== -->
-    <nav>
-
-      <a href="index.html">
-        📊 数据统计
-      </a>
-
-      <a href="foods.html" class="active">
-        🍜 菜品管理
-      </a>
-
-      <a href="categories.html">
-        📂 分类管理
-      </a>
-
-      <a href="orders.html">
-        📦 订单管理
-      </a>
-
-      <a href="users.html">
-        👥 用户管理
-      </a>
-
-      <a href="messages.html">
-        💬 留言管理
-      </a>
-
-      <a href="polls.html">
-        🗳️ 投票管理
-      </a>
-
-      <a href="notices.html">
-        📢 公告管理
-      </a>
-
-      <a href="comments.html">
-        ⭐ 评论管理
-      </a>
-
-      <a href="coupons.html">
-        🎫 优惠券管理
-      </a>
-
-      <a href="delivery.html">
-        🚚 配送地址/区域
-      </a>
-
-      <a href="wallet.html">
-        💰 钱包管理
-      </a>
-
-      <a href="refunds.html">
-        💸 退款审核
-      </a>
-
-      <a href="complaints.html">
-        📢 投诉管理
-      </a>
-
-      <a href="settings.html">
-        ⚙️ 系统设置
-      </a>
-
-    </nav>
-
-
-    <!-- =========================
-         页面内容
-    ========================== -->
-    <main>
-
-      <h2>菜品管理</h2>
-
-
-      <!-- =========================
-           新增菜品
-      ========================== -->
-
-      <div class="section">
-
-        <h3>新增菜品</h3>
-
-        <div class="form-row">
-
-          <input
-            id="foodName"
-            placeholder="菜品名称，例如：宫保鸡丁"
-          >
-
-          <input
-            id="foodPrice"
-            type="number"
-            step="0.01"
-            min="0"
-            placeholder="价格（元）"
-          >
-
-          <select id="foodCategory">
-
-            <option value="">
-              选择分类
-            </option>
-
-          </select>
-
-          <input
-            id="foodSort"
-            type="number"
-            value="0"
-            placeholder="排序"
-          >
-
-<div class="form-row">
-
-  <input
-    id="foodImage"
-    placeholder="图片地址（可选）"
-    style="flex:1;"
-  >
-
-  <input
-    id="foodImageFile"
-    type="file"
-    accept="image/*"
-    style="flex:1;"
-  >
-
-  <button onclick="chooseImage()">
-    上传图片
-  </button>
-
-</div>
-
-<div class="form-row">
-
-  <div id="uploadPreview" style="display:none;">
-
-    <img
-      id="uploadPreviewImage"
-      src=""
-      style="
-        width:100px;
-        height:100px;
-        object-fit:cover;
-        border-radius:8px;
-        border:1px solid #ddd;
-      "
-    >
-
-  </div>
-
-  <span
-    id="uploadStatus"
-    style="color:#666;"
-  ></span>
-
-</div>
-
-
-        <div class="form-row">
-
-          <textarea
-            id="foodDescription"
-            placeholder="菜品描述（可选）"
-            style="width:100%;"
-          ></textarea>
-
-        </div>
-
-
-        <div class="form-row">
-
-          <button onclick="addFood()">
-            添加菜品
-          </button>
-
-        </div>
-
-      </div>
-
-
-      <!-- =========================
-           菜品列表
-      ========================== -->
-
-      <div class="section">
-
-        <h3>菜品列表</h3>
-
-        <table>
-
-          <thead>
-
-            <tr>
-
-              <th>ID</th>
-
-              <th>图片</th>
-
-              <th>菜品名称</th>
-
-              <th>分类</th>
-
-              <th>价格</th>
-
-              <th>描述</th>
-
-              <th>排序</th>
-
-              <th>状态</th>
-
-              <th>操作</th>
-
-            </tr>
-
-          </thead>
-
-          <tbody id="foodTableBody">
-
-            <tr>
-
-              <td colspan="9">
-                正在加载……
-              </td>
-
-            </tr>
-
-          </tbody>
-
-        </table>
-
-      </div>
-
-    </main>
-
-  </div>
-
-</div>
-
-
+<div id="app"></div>
 <script src="app.js"></script>
-
-
 <script>
+Admin.init({ key: 'foods', title: '菜品管理' }, async (body, ctx) => {
+  const { esc, yuan, num, badge, $, $$ } = Admin;
+  const qs = new URLSearchParams(location.search);
+  const state = {
+    tab: 'list', page: 1, pageSize: 10, keyword: '', category_id: qs.get('category_id') || '', status: '',
+    hot: '', discount: '', sort: 'default:desc', selected: new Set(), rows: [], categories: []
+  };
 
+  ctx.setActions('<button class="btn primary" id="addBtn">+ 新增菜品</button>');
+  body.innerHTML = `
+    <div class="tabs">
+      <button class="tab active" data-tab="list">菜品列表</button>
+      <button class="tab" data-tab="rank">销量排行</button>
+    </div>
+    <div id="paneList">
+      <div class="stat-grid" id="summary"></div>
+      <div class="toolbar">
+        <input type="text" id="kw" placeholder="搜索菜品名称 / 描述 / 配料">
+        <select id="fCat"></select>
+        <select id="fStatus"><option value="">全部状态</option><option value="on_sale">已上架</option><option value="off_sale">已下架</option></select>
+        <select id="fFlag"><option value="">全部菜品</option><option value="hot">仅热销</option><option value="discount">仅打折</option></select>
+        <select id="fSort">
+          <option value="default:desc">默认排序</option>
+          <option value="sales:desc">销量从高到低</option>
+          <option value="sales:asc">销量从低到高</option>
+          <option value="price:desc">价格从高到低</option>
+          <option value="price:asc">价格从低到高</option>
+          <option value="new:desc">最新添加</option>
+        </select>
+        <button class="btn ghost" id="resetBtn">重置</button>
+      </div>
+      <div id="batchBar"></div>
+      <div class="table-wrap"><table class="tbl"><thead><tr>
+        <th style="width:34px"><input type="checkbox" id="chkAll"></th><th>菜品</th><th>分类</th><th>价格</th><th>打包费 / 配送费</th><th class="num">销量</th><th>状态</th><th>操作</th>
+      </tr></thead><tbody id="tb"></tbody></table></div>
+      <div id="pager"></div>
+    </div>
+    <div id="paneRank" style="display:none">
+      <div class="toolbar">
+        <select id="rRange"><option value="today">今日</option><option value="7" selected>近 7 天</option><option value="30">近 30 天</option><option value="all">全部</option></select>
+        <select id="rLimit"><option value="10">前 10 名</option><option value="20">前 20 名</option><option value="50">前 50 名</option></select>
+        <span class="muted sm-text">按已付款且未退款的订单统计</span>
+      </div>
+      <div class="table-wrap"><table class="tbl"><thead><tr><th>排名</th><th>菜品</th><th>分类</th><th class="num">销量</th><th class="num">销售额</th><th class="num">订单数</th><th>状态</th></tr></thead><tbody id="rtb"></tbody></table></div>
+    </div>`;
 
-// ==================================================
-// 全局分类数据
-// ==================================================
+  const catName = (id) => (state.categories.find(c => c.id === id) || {}).name || '';
 
-let categories = [];
+  // ---------------- 列表 ----------------
+  async function loadCategories() {
+    state.categories = await Admin.api('/api/admin/categories');
+    $('#fCat').innerHTML = '<option value="">全部分类</option><option value="none">未分类</option>' +
+      state.categories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    $('#fCat').value = state.category_id;
+  }
 
+  async function loadList() {
+    const [sort, order] = state.sort.split(':');
+    const json = await Admin.api('/api/admin/foods', { raw: true, query: {
+      keyword: state.keyword, category_id: state.category_id, status: state.status,
+      hot: state.hot === 'hot' ? 1 : '', discount: state.hot === 'discount' ? 1 : '',
+      sort, order, page: state.page, pageSize: state.pageSize } });
+    state.rows = json.data;
+    const s = json.summary || {};
+    $('#summary').innerHTML = [['菜品总数', s.total], ['已上架', s.on_sale], ['已下架', s.off_sale], ['累计销量', s.total_sales]]
+      .map(([l, n]) => `<div class="stat"><div class="num">${num(n)}</div><div class="label">${l}</div></div>`).join('');
+    $('#tb').innerHTML = json.data.map(f => `
+      <tr>
+        <td><input type="checkbox" class="chk" data-id="${f.id}" ${state.selected.has(f.id) ? 'checked' : ''}></td>
+        <td><div class="cell-food">${f.image ? `<img class="thumb" src="${esc(f.image)}" alt="">` : '<div class="thumb"></div>'}
+          <div><div class="name">${esc(f.name)}</div><div class="muted sm-text">#${f.id}${f.is_hot ? ' ' + badge('热销', 'orange') : ''}${f.discount_enabled ? ' ' + badge(f.discount + ' 折', 'red') : ''}</div></div></div></td>
+        <td>${f.category_name ? esc(f.category_name) : '<span class="muted">未分类</span>'}</td>
+        <td>${f.discount_enabled && f.discount < 10 ? `<span class="old-price">${yuan(f.price)}</span><span class="disc-price">${yuan(f.discount_price)}</span>` : yuan(f.price)}</td>
+        <td class="fee-tag">打包 ${yuan(f.packing_fee)}<br>配送 ${yuan(f.delivery_fee)}</td>
+        <td class="num">${num(f.sales)}</td>
+        <td>${f.status === 'on_sale' ? badge('已上架', 'green') : badge('已下架', 'gray')}</td>
+        <td><div class="row-actions">
+          <button class="btn sm ghost" data-a="detail" data-id="${f.id}">详情</button>
+          <button class="btn sm ghost" data-a="edit" data-id="${f.id}">编辑</button>
+          <button class="btn sm ghost" data-a="toggle" data-id="${f.id}">${f.status === 'on_sale' ? '下架' : '上架'}</button>
+          <button class="btn sm ghost" data-a="hot" data-id="${f.id}">${f.is_hot ? '取消热销' : '设为热销'}</button>
+          <button class="btn sm ghost" style="color:var(--red)" data-a="del" data-id="${f.id}">删除</button>
+        </div></td>
+      </tr>`).join('') || '<tr><td colspan="8" class="empty-state">没有符合条件的菜品</td></tr>';
+    Admin.renderPager($('#pager'), { page: json.page, pageSize: json.pageSize, total: json.total }, (p) => { state.page = p; loadList(); });
+    renderBatch();
+    $('#chkAll').checked = state.rows.length > 0 && state.rows.every(r => state.selected.has(r.id));
+  }
 
-// ==================================================
-// 加载分类
-// ==================================================
+  function renderBatch() {
+    const n = state.selected.size;
+    $('#batchBar').innerHTML = n ? `<div class="batch-bar"><span>已选 <b>${n}</b> 个菜品</span>
+      <button class="btn sm primary" data-b="on_sale">批量上架</button>
+      <button class="btn sm warn" data-b="off_sale">批量下架</button>
+      <button class="btn sm danger" data-b="delete">批量删除</button>
+      <button class="btn sm ghost" data-b="clear">取消选择</button></div>` : '';
+  }
 
-async function loadCategories() {
+  async function reload() { await Promise.all([loadList(), loadCategories().catch(() => {})]); }
 
-  const list =
-    await api('/api/admin/categories');
+  // ---------------- 详情 ----------------
+  async function showDetail(id) {
+    const d = await Admin.api('/api/admin/foods/' + id);
+    const f = d.food, st = d.stats, trend = d.trend || [];
+    const max = Math.max(1, ...trend.map(t => t.qty));
+    const m = Admin.modal({
+      title: '菜品详情', width: 720,
+      body: `
+      <div class="detail-section"><div class="cell-food">${f.image ? `<img class="thumb lg" src="${esc(f.image)}">` : '<div class="thumb lg"></div>'}
+        <div><div class="name" style="font-size:17px">${esc(f.name)} ${f.status === 'on_sale' ? badge('已上架', 'green') : badge('已下架', 'gray')} ${f.is_hot ? badge('热销', 'orange') : ''}</div>
+        <div class="muted" style="margin-top:4px">${esc(f.category_name || '未分类')} · 排序 ${f.sort_order}</div>
+        <div style="margin-top:4px">${f.discount_enabled && f.discount < 10 ? `<span class="old-price">${yuan(f.price)}</span><span class="disc-price">${yuan(f.discount_price)}（${f.discount} 折）</span>` : `<b>${yuan(f.price)}</b>`}
+        <span class="muted"> · 打包费 ${yuan(f.packing_fee)} · 配送费 ${yuan(f.delivery_fee)}</span></div></div></div></div>
+      <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
+        <div class="stat"><div class="num">${num(st.total_sales)}</div><div class="label">累计销量</div></div>
+        <div class="stat"><div class="num">${yuan(st.revenue)}</div><div class="label">累计销售额</div></div>
+        <div class="stat"><div class="num">${num(st.sales_30d)}</div><div class="label">近 30 天销量</div></div>
+        <div class="stat"><div class="num">${num(st.order_count)}</div><div class="label">涉及订单</div></div>
+        <div class="stat"><div class="num">${st.rating_avg || '-'}</div><div class="label">评分（${num(st.review_count)} 条评价）</div></div>
+        <div class="stat"><div class="num">${num(st.favorite_count)}</div><div class="label">收藏人数</div></div>
+      </div>
+      <div class="detail-section"><h4>近 14 天销量走势</h4>
+        <div class="bars" style="height:130px">${trend.map(t => `<div class="bar-col"><div class="bar-val">${t.qty || ''}</div><div class="bar" style="height:${Math.round(t.qty / max * 80)}px"></div><div class="bar-label" style="font-size:11px">${esc(String(t.day).slice(8))}</div></div>`).join('')}</div></div>
+      <div class="detail-section"><h4>菜品信息</h4><dl class="kv">
+        <dt>描述</dt><dd>${esc(f.description) || '-'}</dd><dt>配料</dt><dd>${esc(f.ingredients) || '-'}</dd>
+        <dt>口味</dt><dd>${esc(f.taste) || '-'}</dd><dt>规格/重量</dt><dd>${esc(f.weight) || '-'}</dd>
+        <dt>过敏原</dt><dd>${esc(f.allergen) || '-'}</dd><dt>温馨提示</dt><dd>${esc(f.notice) || '-'}</dd>
+        <dt>创建/更新</dt><dd>${esc(f.created_at)} / ${esc(f.updated_at || '-')}</dd></dl></div>
+      <div class="detail-section"><h4>最新评价</h4>${(d.reviews || []).map(r => `<div style="padding:6px 0;border-bottom:1px solid #f0f2f5">
+        <b>${esc(r.nickname || '用户')}</b> <span style="color:#e8890c">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
+        ${r.status !== 'normal' ? badge('已隐藏', 'gray') : ''} <span class="muted sm-text">${esc(r.created_at)}</span><div>${esc(r.content) || '<span class="muted">（无文字）</span>'}</div></div>`).join('') || '<div class="muted">暂无评价</div>'}</div>`,
+      buttons: [{ text: '编辑菜品', type: 'primary', onClick: () => { setTimeout(() => editFood(f.id), 200); } }, { text: '关闭', type: 'ghost' }]
+    });
+  }
 
-  categories = list || [];
+  // ---------------- 新增 / 编辑 ----------------
+  async function editFood(id) {
+    let f = { name: '', category_id: '', price: '', image: '', description: '', ingredients: '', taste: '', weight: '', allergen: '', notice: '',
+      packing_fee: 0, delivery_fee: 0, discount_enabled: 0, discount: 10, is_hot: 0, sort_order: 0 };
+    if (id) f = (await Admin.api('/api/admin/foods/' + id)).food;
+    // 库里存相对路径：把完整地址还原成 /uploads/...
+    let imagePath = (f.image || '').replace(/^https?:\/\/[^/]+(?=\/uploads\/)/, '');
+    const t = (name, label, val, extra) => `<div class="form-row ${extra && extra.full ? 'full' : ''}"><label>${label}${extra && extra.req ? '<i class="req">*</i>' : ''}</label>
+      ${extra && extra.area ? `<textarea name="${name}" rows="2" maxlength="200">${esc(val)}</textarea>` : `<input name="${name}" type="${extra && extra.type || 'text'}" value="${esc(val)}" ${extra && extra.step ? `step="${extra.step}" min="0"` : ''} ${extra && extra.ph ? `placeholder="${extra.ph}"` : ''} autocomplete="off">`}
+      ${extra && extra.hint ? `<div class="hint">${extra.hint}</div>` : ''}</div>`;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `<form class="form-grid" id="foodForm">
+      ${t('name', '菜品名称', f.name, { req: 1, full: 1 })}
+      <div class="form-row"><label>所属分类</label><select name="category_id"><option value="">未分类</option>${state.categories.map(c => `<option value="${c.id}" ${String(c.id) === String(f.category_id) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
+      ${t('price', '价格（元）', f.price, { req: 1, type: 'number', step: '0.01' })}
+      ${t('packing_fee', '打包费（元/份）', f.packing_fee, { type: 'number', step: '0.01', hint: '每份菜品的打包费，下单时按份数累计' })}
+      ${t('delivery_fee', '配送费（元/份）', f.delivery_fee, { type: 'number', step: '0.01', hint: '配送订单按菜品累计；自取订单不收' })}
+      <div class="form-row"><label>打折</label><label class="check"><input type="checkbox" name="discount_enabled" ${f.discount_enabled ? 'checked' : ''}> 开启折扣</label></div>
+      <div class="form-row"><label>折扣（折）</label><input name="discount" type="number" step="0.1" min="0.1" max="10" value="${esc(f.discount || 10)}"><div class="hint" id="discHint"></div></div>
+      ${t('sort_order', '排序值', f.sort_order, { type: 'number', hint: '数字越小越靠前' })}
+      <div class="form-row"><label>热销标签</label><label class="check"><input type="checkbox" name="is_hot" ${f.is_hot ? 'checked' : ''}> 标记为热销</label></div>
+      <div class="form-row full"><label>菜品图片</label><div class="img-up"><div class="ph" id="imgPh"></div>
+        <div><input type="file" id="imgFile" accept="image/*"><div class="hint" style="margin-top:6px"><button type="button" class="btn sm ghost" id="imgClear">移除图片</button> 建议正方形，≤ 5MB</div></div></div></div>
+      ${t('description', '菜品描述', f.description, { full: 1, area: 1 })}
+      ${t('ingredients', '配料', f.ingredients, { full: 1 })}
+      ${t('taste', '口味', f.taste)}${t('weight', '规格/重量', f.weight, { ph: '如 350g' })}
+      ${t('allergen', '过敏原', f.allergen)}${t('notice', '温馨提示', f.notice)}
+    </form><div class="form-error" id="foodErr"></div>`;
+    const form = wrap.querySelector('#foodForm');
+    const showImg = () => { wrap.querySelector('#imgPh').innerHTML = imagePath ? `<img src="${esc(imagePath)}">` : '暂无图片'; };
+    showImg();
+    const hint = () => {
+      const p = Number(form.price.value), d = Number(form.discount.value);
+      wrap.querySelector('#discHint').textContent = form.discount_enabled.checked && p > 0 && d > 0 && d < 10 ? `折后单价 ${yuan(Math.round(p * d * 10) / 100)}` : '10 = 不打折，8.5 = 八五折';
+    };
+    ['price', 'discount', 'discount_enabled'].forEach(n => form[n].addEventListener('input', hint)); hint();
+    wrap.querySelector('#imgFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      if (file.size > 5 * 1024 * 1024) { Admin.toast('图片不能超过 5MB', 'error'); return; }
+      try { const r = await Admin.uploadImage(file); imagePath = r.path || r.url; wrap.querySelector('#imgPh').innerHTML = `<img src="${esc(r.url)}">`; Admin.toast('图片已上传', 'success'); } catch (err) { /* 已提示 */ }
+    });
+    wrap.querySelector('#imgClear').onclick = () => { imagePath = ''; wrap.querySelector('#imgFile').value = ''; showImg(); };
 
-  const select =
-    document.getElementById('foodCategory');
+    const m = Admin.modal({
+      title: id ? '编辑菜品' : '新增菜品', width: 640, body: wrap, closeOnMask: false,
+      buttons: [{ text: '取消', type: 'ghost' }, { text: id ? '保存修改' : '添加菜品', type: 'primary', keepOpen: true, onClick: async (api) => {
+        const err = wrap.querySelector('#foodErr'); err.textContent = '';
+        const v = (n) => form[n].value.trim();
+        if (!v('name')) { err.textContent = '请填写菜品名称'; return false; }
+        if (v('price') === '' || !(Number(v('price')) >= 0)) { err.textContent = '请填写正确的价格（元）'; return false; }
+        if (Number(v('packing_fee') || 0) < 0 || Number(v('delivery_fee') || 0) < 0) { err.textContent = '打包费、配送费不能为负数'; return false; }
+        const disc = Number(v('discount') || 10);
+        if (form.discount_enabled.checked && !(disc > 0 && disc <= 10)) { err.textContent = '折扣需大于 0 且不超过 10'; return false; }
+        const data = {
+          name: v('name'), category_id: v('category_id') || null, price: Number(v('price')),
+          packing_fee: Number(v('packing_fee') || 0), delivery_fee: Number(v('delivery_fee') || 0),
+          discount_enabled: form.discount_enabled.checked, discount: disc || 10, sort_order: Number(v('sort_order') || 0),
+          is_hot: form.is_hot.checked, image: imagePath, description: v('description'), ingredients: v('ingredients'),
+          taste: v('taste'), weight: v('weight'), allergen: v('allergen'), notice: v('notice')
+        };
+        if (!await Admin.confirmBox({ title: id ? '保存修改' : '添加菜品', message: id ? `确认保存对「${data.name}」的修改吗？` : `确认添加菜品「${data.name}」吗？（添加后默认为上架状态）`, okText: '确认' })) return false;
+        try { await Admin.act(id ? '/api/admin/foods/' + id : '/api/admin/foods', id ? 'PUT' : 'POST', data); } catch (e) { return false; }
+        api.close(); reload();
+      } }]
+    });
+  }
 
-  select.innerHTML = `
-    <option value="">
-      不选择分类
-    </option>
-  `;
-
-  categories.forEach(category => {
-
-    select.innerHTML += `
-      <option value="${category.id}">
-        ${escapeHtml(category.name)}
-      </option>
-    `;
-
-  });
-
-}
-
-
-// ==================================================
-// 加载菜品
-// ==================================================
-
-async function loadFoods() {
-
-  try {
-
-    const list =
-      await api('/api/admin/foods');
-
-    const tbody =
-      document.getElementById('foodTableBody');
-
-
-    if (!list || list.length === 0) {
-
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="9">
-            暂无菜品
-          </td>
-        </tr>
-      `;
-
+  // ---------------- 事件 ----------------
+  body.addEventListener('click', async (e) => {
+    const tab = e.target.closest('[data-tab]');
+    if (tab) {
+      state.tab = tab.dataset.tab;
+      $$('.tab', body).forEach(t => t.classList.toggle('active', t === tab));
+      $('#paneList').style.display = state.tab === 'list' ? '' : 'none';
+      $('#paneRank').style.display = state.tab === 'rank' ? '' : 'none';
+      ctx.actions.style.display = state.tab === 'list' ? '' : 'none';
+      if (state.tab === 'rank') loadRank();
       return;
     }
-
-
-    tbody.innerHTML =
-      list.map(food => {
-
-        let imageHtml = '无';
-
-        if (food.image) {
-
-          imageHtml = `
-            <img
-              src="${escapeHtml(food.image)}"
-              style="
-                width:60px;
-                height:60px;
-                object-fit:cover;
-                border-radius:6px;
-                cursor:pointer;
-              "
-              onclick="window.open(
-                '${escapeJs(food.image)}',
-                '_blank'
-              )"
-            >
-          `;
-
-        }
-
-
-        const statusText =
-          food.status === 'on_sale'
-            ? '上架'
-            : '下架';
-
-
-        const statusClass =
-          food.status === 'on_sale'
-            ? 'completed'
-            : 'rejected';
-
-
-        return `
-
-          <tr>
-
-            <td>
-              ${food.id}
-            </td>
-
-            <td>
-              ${imageHtml}
-            </td>
-
-            <td>
-              ${escapeHtml(food.name)}
-            </td>
-
-            <td>
-              ${escapeHtml(food.category_name || '未分类')}
-            </td>
-
-            <td>
-              ¥${(Number(food.price || 0) / 100).toFixed(2)}
-            </td>
-
-            <td>
-              ${escapeHtml(food.description || '')}
-            </td>
-
-            <td>
-              ${food.sort_order}
-            </td>
-
-            <td>
-
-              <span class="badge ${statusClass}">
-                ${statusText}
-              </span>
-
-            </td>
-
-            <td>
-
-              <button
-                onclick="editFood(${food.id})"
-              >
-                编辑
-              </button>
-
-              <button
-                class="${food.status === 'on_sale' ? 'gray' : ''}"
-                onclick="toggleFood(${food.id})"
-              >
-                ${food.status === 'on_sale'
-                  ? '下架'
-                  : '上架'}
-              </button>
-
-            </td>
-
-          </tr>
-
-        `;
-
-      }).join('');
-
-  } catch (error) {
-
-    console.error(error);
-
-  }
-
-}
-
-
-// ==================================================
-// 添加菜品
-// ==================================================
-
-async function addFood() {
-
-  const name =
-    document.getElementById('foodName')
-      .value
-      .trim();
-
-
-  const priceYuan =
-    document.getElementById('foodPrice')
-      .value;
-
-
-  const categoryId =
-    document.getElementById('foodCategory')
-      .value;
-
-
-  const sortOrder =
-    Number(
-      document.getElementById('foodSort')
-        .value
-    ) || 0;
-
-
-  const image =
-    document.getElementById('foodImage')
-      .value
-      .trim();
-
-
-  const description =
-    document.getElementById('foodDescription')
-      .value
-      .trim();
-
-
-  if (!name) {
-
-    alert('请输入菜品名称');
-
-    return;
-  }
-
-
-  if (
-    priceYuan === '' ||
-    Number(priceYuan) < 0
-  ) {
-
-    alert('请输入正确的菜品价格');
-
-    return;
-  }
-
-
-  const price =
-    Math.round(
-      Number(priceYuan) * 100
-    );
-
-
-  try {
-
-    await api('/api/admin/foods', {
-
-      method: 'POST',
-
-      body: {
-
-        category_id:
-          categoryId
-            ? Number(categoryId)
-            : null,
-
-        name,
-
-        price,
-
-        image,
-
-        description,
-
-        sort_order: sortOrder
-
-      }
-
-    });
-
-
-    alert('菜品添加成功');
-
-
-    document.getElementById('foodName').value = '';
-
-    document.getElementById('foodPrice').value = '';
-
-    document.getElementById('foodCategory').value = '';
-
-    document.getElementById('foodSort').value = '0';
-
-document.getElementById('foodImage').value = '';
-
-document.getElementById('foodImageFile').value = '';
-
-document.getElementById('uploadPreview').style.display = 'none';
-
-document.getElementById('uploadPreviewImage').src = '';
-
-document.getElementById('uploadStatus').textContent = '';
-
-document.getElementById('foodDescription').value = '';
-
-
-    loadFoods();
-
-  } catch (error) {
-
-    console.error(error);
-
-  }
-
-}
-
-
-// ==================================================
-// 编辑菜品
-// ==================================================
-
-async function editFood(id) {
-
-  const list =
-    await api('/api/admin/foods');
-
-
-  const food =
-    list.find(item => item.id === id);
-
-
-  if (!food) {
-
-    alert('菜品不存在');
-
-    return;
-  }
-
-
-  const name =
-    prompt(
-      '菜品名称：',
-      food.name
-    );
-
-
-  if (name === null) {
-    return;
-  }
-
-
-  if (!name.trim()) {
-
-    alert('菜品名称不能为空');
-
-    return;
-  }
-
-
-  const price =
-    prompt(
-      '价格（元）：',
-      (Number(food.price || 0) / 100).toFixed(2)
-    );
-
-
-  if (price === null) {
-    return;
-  }
-
-
-  const priceNumber =
-    Number(price);
-
-
-  if (
-    !Number.isFinite(priceNumber) ||
-    priceNumber < 0
-  ) {
-
-    alert('价格不正确');
-
-    return;
-  }
-
-
-  const description =
-    prompt(
-      '菜品描述：',
-      food.description || ''
-    );
-
-
-  if (description === null) {
-    return;
-  }
-
-
-  const sortOrderText =
-    prompt(
-      '排序：',
-      food.sort_order || 0
-    );
-
-
-  if (sortOrderText === null) {
-    return;
-  }
-
-
-  const sortOrder =
-    Number(sortOrderText);
-
-
-  if (!Number.isInteger(sortOrder)) {
-
-    alert('排序必须是整数');
-
-    return;
-  }
-
-
-  try {
-
-    await api(
-      `/api/admin/foods/${id}`,
-      {
-
-        method: 'PUT',
-
-        body: {
-
-          category_id:
-            food.category_id
-              ? Number(food.category_id)
-              : null,
-
-          name:
-            name.trim(),
-
-          price:
-            Math.round(priceNumber * 100),
-
-          image:
-            food.image || '',
-
-          description:
-            description.trim(),
-
-          sort_order:
-            sortOrder
-
-        }
-
-      }
-    );
-
-
-    alert('菜品修改成功');
-
-    loadFoods();
-
-  } catch (error) {
-
-    console.error(error);
-
-  }
-
-}
-
-
-// ==================================================
-// 上架 / 下架
-// ==================================================
-
-async function toggleFood(id) {
-
-  if (
-    !confirm(
-      '确定要修改这个菜品的上架状态吗？'
-    )
-  ) {
-
-    return;
-
-  }
-
-
-  try {
-
-    await api(
-      `/api/admin/foods/${id}/toggle`,
-      {
-        method: 'POST'
-      }
-    );
-
-
-    loadFoods();
-
-  } catch (error) {
-
-    console.error(error);
-
-  }
-
-}
-
-
-// ==================================================
-// 图片上传
-// ==================================================
-
-async function chooseImage() {
-
-  const fileInput =
-    document.getElementById('foodImageFile');
-
-  const file =
-    fileInput.files[0];
-
-  if (!file) {
-
-    alert('请先选择一张图片');
-
-    return;
-
-  }
-
-
-  if (!file.type.startsWith('image/')) {
-
-    alert('请选择图片文件');
-
-    return;
-
-  }
-
-
-  if (file.size > 10 * 1024 * 1024) {
-
-    alert('图片不能超过 10MB');
-
-    return;
-
-  }
-
-
-  const statusEl =
-    document.getElementById('uploadStatus');
-
-  const previewBox =
-    document.getElementById('uploadPreview');
-
-  const previewImage =
-    document.getElementById('uploadPreviewImage');
-
-
-  statusEl.textContent =
-    '正在上传，请稍候……';
-
-
-  try {
-
-    const formData =
-      new FormData();
-
-    formData.append(
-      'file',
-      file
-    );
-
-
-    const res =
-      await fetch(
-        '/api/upload',
-        {
-          method: 'POST',
-
-          headers: {
-            'Authorization':
-              'Bearer ' + (getToken() || '')
-          },
-
-          body: formData
-        }
-      );
-
-
-    const json =
-      await res.json();
-
-
-    if (
-      res.status !== 200 ||
-      json.code !== 0
-    ) {
-
-      throw new Error(
-        json.message ||
-        '图片上传失败'
-      );
-
+    const bb = e.target.closest('[data-b]');
+    if (bb) {
+      const act = bb.dataset.b;
+      if (act === 'clear') { state.selected.clear(); loadList(); return; }
+      const ids = [...state.selected];
+      const text = { on_sale: '批量上架', off_sale: '批量下架', delete: '批量删除' }[act];
+      if (!await Admin.confirmBox({ title: text, danger: act === 'delete', okText: '确认' + text.slice(2),
+        message: `确定对选中的 ${ids.length} 个菜品执行「${text}」吗？` + (act === 'delete' ? '\n删除后不可恢复（有进行中订单的菜品会被跳过）。' : '') })) return;
+      try { await Admin.act('/api/admin/foods/batch', 'POST', { ids, action: act }); state.selected.clear(); await reload(); } catch (err) {}
+      return;
     }
+    const b = e.target.closest('button[data-a]');
+    if (!b) return;
+    const id = Number(b.dataset.id), f = state.rows.find(x => x.id === id);
+    try {
+      switch (b.dataset.a) {
+        case 'detail': return await showDetail(id);
+        case 'edit': return await editFood(id);
+        case 'toggle':
+          if (!await Admin.confirmBox({ title: f.status === 'on_sale' ? '下架菜品' : '上架菜品', okText: '确认', danger: f.status === 'on_sale',
+            message: f.status === 'on_sale' ? `确定下架「${f.name}」吗？下架后小程序里将看不到该菜品。` : `确定上架「${f.name}」吗？` })) return;
+          await Admin.act(`/api/admin/foods/${id}/toggle`, 'POST'); break;
+        case 'hot':
+          if (!await Admin.confirmBox({ title: '热销标签', okText: '确认', message: f.is_hot ? `确定取消「${f.name}」的热销标签吗？` : `确定把「${f.name}」设为热销吗？` })) return;
+          await Admin.act(`/api/admin/foods/${id}/hot`, 'POST'); break;
+        case 'del':
+          if (!await Admin.confirmBox({ title: '删除菜品', danger: true, okText: '确认删除', message: `确定删除「${f.name}」吗？\n删除后不可恢复，历史订单不受影响。如只是暂时不卖，建议使用「下架」。` })) return;
+          await Admin.act('/api/admin/foods/' + id, 'DELETE'); state.selected.delete(id); break;
+      }
+      await reload();
+    } catch (err) { /* 已 toast */ }
+  });
+  body.addEventListener('change', (e) => {
+    if (e.target.classList.contains('chk')) {
+      const id = Number(e.target.dataset.id);
+      e.target.checked ? state.selected.add(id) : state.selected.delete(id);
+      renderBatch(); $('#chkAll').checked = state.rows.every(r => state.selected.has(r.id));
+    }
+  });
+  $('#chkAll').onchange = (e) => { state.rows.forEach(r => e.target.checked ? state.selected.add(r.id) : state.selected.delete(r.id)); $$('.chk', body).forEach(c => c.checked = e.target.checked); renderBatch(); };
+  const apply = () => { state.page = 1; loadList(); };
+  $('#kw').addEventListener('input', Admin.debounce((e) => { state.keyword = e.target.value.trim(); apply(); }, 350));
+  $('#fCat').onchange = (e) => { state.category_id = e.target.value; apply(); };
+  $('#fStatus').onchange = (e) => { state.status = e.target.value; apply(); };
+  $('#fFlag').onchange = (e) => { state.hot = e.target.value; apply(); };
+  $('#fSort').onchange = (e) => { state.sort = e.target.value; apply(); };
+  $('#resetBtn').onclick = () => { Object.assign(state, { keyword: '', category_id: '', status: '', hot: '', sort: 'default:desc' });
+    $('#kw').value = ''; $('#fCat').value = ''; $('#fStatus').value = ''; $('#fFlag').value = ''; $('#fSort').value = 'default:desc'; apply(); };
+  $('#addBtn').onclick = () => editFood(null);
 
-
-    const imageUrl =
-      json.data.url;
-
-
-    document.getElementById(
-      'foodImage'
-    ).value = imageUrl;
-
-
-    previewImage.src =
-      imageUrl;
-
-    previewBox.style.display =
-      'block';
-
-
-    statusEl.textContent =
-      '图片上传成功';
-
-
-    alert('图片上传成功');
-
-  } catch (error) {
-
-    console.error(
-      '图片上传失败：',
-      error
-    );
-
-
-    statusEl.textContent =
-      '图片上传失败';
-
-
-    alert(
-      error.message ||
-      '图片上传失败，请检查后端服务是否正常'
-    );
-
+  async function loadRank() {
+    const rows = await Admin.api('/api/admin/foods/ranking', { query: { range: $('#rRange').value, limit: $('#rLimit').value } });
+    const max = Math.max(1, ...rows.map(r => r.sales));
+    $('#rtb').innerHTML = rows.map(r => `<tr>
+      <td><span class="rank-no ${r.rank <= 3 ? 'top' : ''}">${r.rank}</span></td>
+      <td><div class="cell-food">${r.image ? `<img class="thumb" src="${esc(r.image)}">` : '<div class="thumb"></div>'}<div style="flex:1"><div class="name">${esc(r.name)}</div>
+        <div class="hbar" style="margin:4px 0 0"><div class="track"><div class="fill" style="width:${r.sales / max * 100}%"></div></div></div></div></div></td>
+      <td>${esc(r.category_name) || '<span class="muted">-</span>'}</td><td class="num"><b>${num(r.sales)}</b></td><td class="num">${yuan(r.revenue)}</td><td class="num">${num(r.order_count)}</td>
+      <td>${r.status === 'on_sale' ? badge('已上架', 'green') : r.status === 'off_sale' ? badge('已下架', 'gray') : badge('已删除', 'red')}</td></tr>`).join('')
+      || '<tr><td colspan="7" class="empty-state">该时间段内暂无销量</td></tr>';
   }
-
-}
-
-
-// ==================================================
-// HTML 转义
-// ==================================================
-
-function escapeHtml(value) {
-
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-
-}
-
-
-// ==================================================
-// JS 字符串转义
-// ==================================================
-
-function escapeJs(value) {
-
-  return String(value || '')
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/\r/g, '')
-    .replace(/\n/g, '\\n');
-
-}
-
-
-// ==================================================
-// 页面初始化
-// ==================================================
-
-async function loadPage() {
+  $('#rRange').onchange = loadRank; $('#rLimit').onchange = loadRank;
 
   await loadCategories();
-
-  await loadFoods();
-
-}
-
-
-initPage(loadPage);
-
-
+  await loadList();
+});
 </script>
-
 </body>
 </html>

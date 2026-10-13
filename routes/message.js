@@ -1,7 +1,17 @@
 const express = require('express');
 const db = require('../db/init');
+const { signUserToken, optionalUser } = require('../middleware/auth');
 
 const router = express.Router();
+
+// 已登录时，以 token 里的用户为准（防止小程序端伪造 user_id 冒充别人留言/点赞）
+router.use(optionalUser, (req, res, next) => {
+  if (req.userId) {
+    if (req.body && typeof req.body === 'object') req.body.user_id = req.userId;
+    if (req.query) req.query.user_id = String(req.userId);
+  }
+  next();
+});
 
 // 开发模式登录
 // 根据 dev_account 查找用户
@@ -42,15 +52,18 @@ router.post('/dev-login', (req, res) => {
       })
     }
 
-    return res.json({
-      code: 0,
-      data: {
-        id: user.id,
-        dev_account: user.dev_account,
-        nickname: user.nickname,
-        avatar: user.avatar || ''
-      }
-    })
+const token = signUserToken(user.id)
+
+return res.json({
+  code: 0,
+  data: {
+    id: user.id,
+    dev_account: user.dev_account,
+    nickname: user.nickname,
+    avatar: user.avatar || '',
+    token
+  }
+})
   } catch (error) {
     console.error('开发模式登录失败：', error)
 
@@ -145,11 +158,18 @@ router.get('/', (req, res) => {
           WHERE ml.message_id = m.id
         ) AS like_count,
 
-        (
-          SELECT COUNT(*)
-          FROM message_comments mc
-          WHERE mc.message_id = m.id
-        ) AS comment_count
+(
+  SELECT COUNT(*)
+  FROM message_comments mc
+  WHERE mc.message_id = m.id
+) AS comment_count,
+
+(
+  SELECT COUNT(*)
+  FROM message_comments mc_admin
+  WHERE mc_admin.message_id = m.id
+    AND mc_admin.is_admin = 1
+) AS merchant_reply_count
 
       FROM messages m
 
@@ -192,7 +212,8 @@ router.get('/', (req, res) => {
         updated_at: item.updated_at,
 
         like_count: Number(item.like_count || 0),
-        comment_count: Number(item.comment_count || 0)
+	comment_count: Number(item.comment_count || 0),
+	merchant_reply_count: Number(item.merchant_reply_count || 0)
       };
     });
 
@@ -210,6 +231,249 @@ router.get('/', (req, res) => {
     });
   }
 });
+
+// =========================
+// 小程序：发布留言
+// POST /api/messages
+// =========================
+router.post('/', (req, res) => {
+  try {
+
+    const userId =
+      Number(req.body.user_id)
+
+    const content =
+      String(req.body.content || '').trim()
+
+    const images =
+      Array.isArray(req.body.images)
+        ? req.body.images
+        : []
+
+
+    // =========================
+    // 检查用户
+    // =========================
+
+    if (!userId) {
+
+      return res.status(400).json({
+        code: 400,
+        message: '用户ID无效'
+      })
+
+    }
+
+
+    const user =
+      db.prepare(`
+        SELECT
+          id,
+          nickname,
+          avatar,
+          status
+        FROM users
+        WHERE id = ?
+        LIMIT 1
+      `).get(userId)
+
+
+    if (!user) {
+
+      return res.status(404).json({
+        code: 404,
+        message: '用户不存在'
+      })
+
+    }
+
+
+    if (user.status !== 'normal') {
+
+      return res.status(403).json({
+        code: 403,
+        message: '该用户已被禁用'
+      })
+
+    }
+
+
+    // =========================
+    // 检查留言内容
+    // =========================
+
+    if (
+      !content &&
+      images.length === 0
+    ) {
+
+      return res.status(400).json({
+        code: 400,
+        message: '留言内容不能为空'
+      })
+
+    }
+
+
+    if (content.length > 1000) {
+
+      return res.status(400).json({
+        code: 400,
+        message: '留言内容不能超过1000字'
+      })
+
+    }
+
+
+    if (images.length > 9) {
+
+      return res.status(400).json({
+        code: 400,
+        message: '最多添加9张图片'
+      })
+
+    }
+
+
+    // =========================
+    // 保存留言
+    // =========================
+
+    const result =
+      db.prepare(`
+        INSERT INTO messages (
+          user_id,
+          content,
+          images,
+          status
+        )
+        VALUES (?, ?, ?, 'normal')
+      `).run(
+        userId,
+        content,
+        JSON.stringify(images)
+      )
+
+
+    const messageId =
+      Number(result.lastInsertRowid)
+
+
+    // =========================
+    // 查询刚刚创建的留言
+    // =========================
+
+    const message =
+      db.prepare(`
+        SELECT
+          m.id,
+          m.user_id,
+          m.content,
+          m.images,
+          m.status,
+          m.created_at,
+          m.updated_at,
+
+          u.nickname,
+          u.dev_account
+
+        FROM messages m
+
+        LEFT JOIN users u
+          ON u.id = m.user_id
+
+        WHERE m.id = ?
+      `).get(messageId)
+
+
+    let messageImages = []
+
+    if (message.images) {
+
+      try {
+
+        const parsed =
+          JSON.parse(message.images)
+
+        messageImages =
+          Array.isArray(parsed)
+            ? parsed
+            : []
+
+      } catch (e) {
+
+        messageImages = []
+
+      }
+
+    }
+
+
+    // =========================
+    // 返回创建结果
+    // =========================
+
+    return res.json({
+
+      code: 0,
+
+      data: {
+
+        id:
+          message.id,
+
+        user_id:
+          message.user_id,
+
+        nickname:
+          message.nickname || '食客',
+
+        dev_account:
+          message.dev_account || '',
+
+        content:
+          message.content || '',
+
+        images:
+          messageImages,
+
+        status:
+          message.status,
+
+        created_at:
+          message.created_at,
+
+        updated_at:
+          message.updated_at,
+
+        like_count:
+          0,
+
+        comment_count:
+          0
+
+      }
+
+    })
+
+  } catch (error) {
+
+    console.error(
+      '发布留言失败：',
+      error
+    )
+
+    return res.status(500).json({
+
+      code: 500,
+
+      message:
+        '发布留言失败'
+
+    })
+
+  }
+})
 
 router.get('/:id', (req, res) => {
   try {

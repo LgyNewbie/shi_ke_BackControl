@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>公告管理</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="app.js"></script>
+<script>
+Admin.init({ key: 'notices', title: '公告管理' }, async (main) => {
+  const { api, act, esc, badge, modal, confirmBox, formBox, debounce, $ } = Admin;
+  const state = { page: 1, pageSize: 15, keyword: '', status: '' };
+  let all = [];
+
+  main.innerHTML = `
+    <div class="toolbar">
+      <input type="search" id="kw" placeholder="搜索公告标题 / 内容">
+      <select id="st"><option value="">全部状态</option><option value="published">已发布</option><option value="offline">已下线</option></select>
+      <button class="btn ghost" id="reload">刷新</button>
+      <span class="grow"></span>
+      <button class="btn primary" id="add">＋ 发布公告</button>
+    </div>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr><th>ID</th><th>标题</th><th>类型</th><th>内容</th><th>状态</th><th>发布人 / 时间</th><th>操作</th></tr></thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+    <div id="pager"></div>`;
+
+  const short = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; };
+
+  function render() {
+    const total = all.length;
+    const maxPage = Math.max(1, Math.ceil(total / state.pageSize));
+    if (state.page > maxPage) state.page = maxPage;
+    const slice = all.slice((state.page - 1) * state.pageSize, state.page * state.pageSize);
+    $('#tb').innerHTML = slice.length ? slice.map((n) => `
+      <tr>
+        <td>${n.id}</td>
+        <td style="max-width:220px"><b>${esc(n.title)}</b> ${n.pinned ? badge('置顶', 'orange') : ''}</td>
+        <td>${badge(n.type || '公告', 'blue')}</td>
+        <td style="max-width:320px"><div class="ellipsis" style="max-width:320px" title="${esc(n.content)}">${esc(short(n.content, 60))}</div></td>
+        <td>${n.status === 'published' ? badge('已发布', 'green') : badge('已下线', 'gray')}</td>
+        <td class="sm-text">${esc(n.author || '')}<div class="muted">${esc(n.created_at || '')}</div></td>
+        <td><div class="row-actions">
+          <button class="btn sm blue" data-act="edit" data-id="${n.id}">编辑</button>
+          <button class="btn sm warn" data-act="pin" data-id="${n.id}">${n.pinned ? '取消置顶' : '置顶'}</button>
+          <button class="btn sm ${n.status === 'published' ? 'ghost' : 'primary'}" data-act="status" data-id="${n.id}">${n.status === 'published' ? '下线' : '发布'}</button>
+          <button class="btn sm danger" data-act="del" data-id="${n.id}">删除</button>
+        </div></td></tr>`).join('') : '<tr><td colspan="7" class="empty-state">暂无公告</td></tr>';
+    Admin.renderPager($('#pager'), { page: state.page, pageSize: state.pageSize, total }, (p) => { state.page = p; render(); });
+  }
+  async function load() {
+    const d = await api('/api/admin/notices', { query: { keyword: state.keyword, status: state.status } });
+    all = Array.isArray(d) ? d : [];
+    render();
+  }
+
+  async function editForm(n) {
+    const r = await formBox({
+      title: n ? `编辑公告 #${n.id}` : '发布公告', okText: n ? '保存' : '发布', width: 560,
+      fields: [
+        { name: 'title', label: '标题', required: true, full: true, maxlength: 50, value: n && n.title },
+        { name: 'type', label: '类型', value: n ? n.type : '公告', maxlength: 10, hint: '如：公告 / 活动 / 通知' },
+        { name: 'pinned', label: '置顶', type: 'checkbox', checkText: '在小程序中置顶显示', value: n && n.pinned },
+        { name: 'content', label: '内容', type: 'textarea', rows: 7, required: true, full: true, value: n && n.content }
+      ],
+      submit: (v) => {
+        const body = { title: v.title, content: v.content, type: v.type || '公告', pinned: v.pinned };
+        return n ? act(`/api/admin/notices/${n.id}`, 'PUT', body) : act('/api/admin/notices', 'POST', body);
+      }
+    });
+    if (r) load();
+  }
+
+  $('#tb').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const n = all.find((x) => x.id === Number(b.dataset.id));
+    if (!n) return;
+    const a = b.dataset.act;
+    if (a === 'edit') return editForm(n);
+    if (a === 'pin') {
+      const ok = await confirmBox({ title: n.pinned ? '取消置顶' : '置顶公告', message: n.pinned ? `确定取消「${n.title}」的置顶吗？` : `确定置顶「${n.title}」吗？`, okText: '确认' });
+      if (ok) { await act(`/api/admin/notices/${n.id}/pin`, 'POST', {}); load(); }
+    } else if (a === 'status') {
+      const pub = n.status !== 'published';
+      const ok = await confirmBox({ title: pub ? '发布公告' : '下线公告', message: pub ? `确定重新发布「${n.title}」吗？用户将可见。` : `确定下线「${n.title}」吗？下线后用户端不再显示。`, okText: pub ? '确认发布' : '确认下线', danger: !pub });
+      if (ok) { await act(`/api/admin/notices/${n.id}/status`, 'POST', {}); load(); }
+    } else if (a === 'del') {
+      const ok = await confirmBox({ title: '删除公告', message: `确定永久删除公告「${n.title}」吗？无法恢复。`, danger: true, okText: '确认删除' });
+      if (ok) { await act(`/api/admin/notices/${n.id}`, 'DELETE'); load(); }
+    }
+  });
+  $('#add').addEventListener('click', () => editForm(null));
+  $('#kw').addEventListener('input', debounce((e) => { state.keyword = e.target.value.trim(); state.page = 1; load(); }, 350));
+  $('#st').addEventListener('change', (e) => { state.status = e.target.value; state.page = 1; load(); });
+  $('#reload').addEventListener('click', load);
+  await load();
+});
+</script>
+</body>
+</html>

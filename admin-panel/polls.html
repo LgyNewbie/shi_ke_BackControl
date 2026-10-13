@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>投票管理</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="app.js"></script>
+<script>
+Admin.init({ key: 'polls', title: '投票管理' }, async (main) => {
+  const { api, act, esc, badge, modal, confirmBox, formBox, debounce, $ } = Admin;
+  const state = { keyword: '', status: '' };
+  let rows = [];
+  const COLORS = { active: 'green', ended: 'gray', accepted: 'blue', rejected: 'orange' };
+
+  main.innerHTML = `
+    <div class="toolbar">
+      <input type="search" id="kw" placeholder="搜索投票标题 / 说明">
+      <select id="st">
+        <option value="">全部状态</option><option value="active">进行中</option><option value="ended">已结束</option>
+        <option value="accepted">已采纳</option><option value="rejected">暂不采纳</option>
+      </select>
+      <button class="btn ghost" id="reload">刷新</button>
+      <span class="grow"></span>
+      <button class="btn primary" id="add">＋ 发起投票</button>
+    </div>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr><th>ID</th><th>标题</th><th>选项 / 领先</th><th class="num">总票数</th><th>状态</th><th>截止时间</th><th>创建时间</th><th>操作</th></tr></thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>`;
+
+  async function load() {
+    const d = await api('/api/admin/polls', { query: { keyword: state.keyword, status: state.status } });
+    rows = Array.isArray(d) ? d : [];
+    $('#tb').innerHTML = rows.length ? rows.map((p) => {
+      const lead = p.total_votes ? p.options.filter((o) => o.is_winner).map((o) => o.name).join('、') : '暂无投票';
+      const st = p.status;
+      const btns = [`<button class="btn sm ghost" data-act="result" data-id="${p.id}">结果</button>`,
+        `<button class="btn sm blue" data-act="edit" data-id="${p.id}">编辑</button>`];
+      if (st === 'active') btns.push(`<button class="btn sm warn" data-act="close" data-id="${p.id}">结束</button>`);
+      else btns.push(`<button class="btn sm primary" data-act="reopen" data-id="${p.id}">重新开启</button>`);
+      if (st === 'ended') {
+        btns.push(`<button class="btn sm ghost" data-act="accept" data-id="${p.id}">采纳</button>`);
+        btns.push(`<button class="btn sm ghost" data-act="reject" data-id="${p.id}">暂不采纳</button>`);
+      }
+      btns.push(`<button class="btn sm danger" data-act="del" data-id="${p.id}">删除</button>`);
+      return `<tr>
+        <td>${p.id}</td>
+        <td style="max-width:260px"><b>${esc(p.title)}</b><div class="muted sm-text ellipsis" title="${esc(p.description)}">${esc(p.description)}</div></td>
+        <td>${p.options.length} 项<div class="muted sm-text">${esc(lead)}</div></td>
+        <td class="num">${p.total_votes}</td>
+        <td>${badge(p.status_text, COLORS[st])}</td>
+        <td class="sm-text">${esc(p.end_time || '不限')}</td>
+        <td class="sm-text">${esc(p.created_at)}</td>
+        <td><div class="row-actions">${btns.join('')}</div></td></tr>`;
+    }).join('') : '<tr><td colspan="8" class="empty-state">暂无投票</td></tr>';
+  }
+
+  const toLocalInput = (s) => (s ? String(s).replace(' ', 'T').slice(0, 16) : '');
+
+  async function editForm(p) {
+    const locked = p && p.total_votes > 0;
+    const fields = [
+      { name: 'title', label: '投票标题', required: true, full: true, maxlength: 50 },
+      { name: 'description', label: '投票说明', type: 'textarea', rows: 2, full: true },
+      { name: 'end_time', label: '截止时间', type: 'datetime-local', full: true, hint: '留空表示不限时，需手动结束；到点自动结束' }
+    ];
+    fields.forEach((f) => { if (p) f.value = f.name === 'end_time' ? toLocalInput(p.end_time) : p[f.name]; });
+    if (!locked) {
+      fields.push({
+        name: 'options', label: '选项（每行一个，2-8 个）', type: 'textarea', rows: 5, required: true, full: true,
+        value: p ? p.options.map((o) => o.name).join('\n') : '', placeholder: '红烧牛肉面\n番茄鸡蛋面'
+      });
+    } else {
+      fields.push({ name: 'tip', label: '选项', full: true, value: p.options.map((o) => o.name).join(' / '), hint: '已有人投票，选项不可修改' });
+    }
+    const parseOpts = (t) => String(t || '').split('\n').map((s) => s.trim()).filter(Boolean);
+    const r = await formBox({
+      title: p ? `编辑投票 #${p.id}` : '发起投票', okText: p ? '保存' : '发起', width: 520, fields,
+      validate: (v) => {
+        if (locked) return;
+        const n = parseOpts(v.options).length;
+        if (n < 2 || n > 8) return '选项需要 2-8 个（每行一个）';
+      },
+      submit: (v) => {
+        const body = {
+          title: v.title, description: v.description, end_time: v.end_time || null,
+          options: (locked ? p.options.map((o) => o.name) : parseOpts(v.options)).map((name) => ({ name }))
+        };
+        return p ? act(`/api/admin/polls/${p.id}`, 'PUT', body) : act('/api/admin/polls', 'POST', body);
+      }
+    });
+    if (r) load();
+  }
+  document.addEventListener('focusin', (e) => { if (e.target.id === 'f_tip') e.target.readOnly = true; });
+
+  async function result(id) {
+    const p = await api(`/api/admin/polls/${id}`);
+    const html = `
+      <div class="detail-section">
+        <div><b>${esc(p.title)}</b> ${badge(p.status_text, COLORS[p.status])}</div>
+        <div class="muted sm-text pre">${esc(p.description)}</div>
+        <div class="muted sm-text">共 ${p.total_votes} 票 · 截止 ${esc(p.end_time || '不限')}</div>
+      </div>
+      <div class="detail-section"><h4>投票结果</h4>
+        ${p.options.map((o) => `<div class="hbar"><span class="name" title="${esc(o.name)}">${o.is_winner ? '🏆 ' : ''}${esc(o.name)}</span>
+          <div class="track"><div class="fill" style="width:${o.percent}%"></div></div><span class="val">${o.votes} 票 · ${o.percent}%</span></div>`).join('')}
+      </div>
+      <div class="detail-section"><h4>投票明细（${p.voters.length}）</h4>
+        ${p.voters.length ? `<table class="tbl" style="min-width:0"><tbody>${p.voters.map((v) => `<tr>
+          <td>${esc(v.nickname || v.dev_account || '用户')}</td><td>${esc(v.option_name)}</td><td class="muted sm-text">${esc(v.created_at)}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">还没有人投票</div>'}
+      </div>`;
+    modal({ title: `投票结果 #${p.id}`, width: 620, body: html, buttons: [{ text: '关闭', type: 'ghost' }] });
+  }
+
+  async function setStatus(p, status) {
+    const map = {
+      ended: ['结束投票', `确定结束「${p.title}」吗？结束后用户不能再投票。`, '确认结束'],
+      active: ['重新开启', `确定重新开启「${p.title}」吗？用户将可以继续投票（若已过截止时间会再次自动结束，请先编辑截止时间）。`, '确认开启'],
+      accepted: ['采纳投票结果', `确定将「${p.title}」标记为「已采纳」吗？`, '确认采纳'],
+      rejected: ['暂不采纳', `确定将「${p.title}」标记为「暂不采纳」吗？`, '确认']
+    }[status];
+    const ok = await confirmBox({ title: map[0], message: map[1], okText: map[2], danger: status === 'ended' });
+    if (!ok) return;
+    await act(`/api/admin/polls/${p.id}/status`, 'POST', { status });
+    load();
+  }
+
+  $('#tb').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const p = rows.find((x) => x.id === Number(b.dataset.id));
+    if (!p) return;
+    const a = b.dataset.act;
+    if (a === 'result') result(p.id);
+    else if (a === 'edit') editForm(p);
+    else if (a === 'close') setStatus(p, 'ended');
+    else if (a === 'reopen') setStatus(p, 'active');
+    else if (a === 'accept') setStatus(p, 'accepted');
+    else if (a === 'reject') setStatus(p, 'rejected');
+    else if (a === 'del') {
+      const ok = await confirmBox({ title: '删除投票', message: `确定永久删除投票「${p.title}」吗？\n其 ${p.total_votes} 条投票记录会一并删除，无法恢复。`, danger: true, okText: '确认删除' });
+      if (ok) { await act(`/api/admin/polls/${p.id}`, 'DELETE'); load(); }
+    }
+  });
+  $('#add').addEventListener('click', () => editForm(null));
+  $('#kw').addEventListener('input', debounce((e) => { state.keyword = e.target.value.trim(); load(); }, 350));
+  $('#st').addEventListener('change', (e) => { state.status = e.target.value; load(); });
+  $('#reload').addEventListener('click', load);
+  await load();
+});
+</script>
+</body>
+</html>

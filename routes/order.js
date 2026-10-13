@@ -1,84 +1,86 @@
+// 小程序端订单接口。所有金额：入参/出参都是「元」。
+//
+//   POST /api/orders/preview      结算页算价（不创建订单）
+//   POST /api/orders              创建订单（金额由服务端按菜品价格重新计算）
+//   GET  /api/orders              我的订单列表
+//   GET  /api/orders/:id          订单详情
+//   POST /api/orders/:id/pay      支付（目前是模拟支付/钱包支付）
+//   POST /api/orders/:id/cancel   取消订单（未支付直接取消；已支付且商家未接单则自动退款到钱包）
+//   POST /api/orders/:id/refund   申请退款（商家已接单之后走这里，需商家审核）
+//   POST /api/orders/:id/delete   删除订单（仅对用户隐藏）
+
 const express = require('express');
-const db = require('../db/init');
 const { requireUser } = require('../middleware/auth');
+const { fenToYuan } = require('../services/money');
+const svc = require('../services/orders');
 
 const router = express.Router();
+const { wrap, BizError } = svc;
 
-// 创建订单（amount 单位：分）
-// 说明：这里只是给你演示"取消订单->退款"这条链路用的最简订单表。
-// 如果你已经有自己的订单体系/表，可以不用这张表，
-// 直接在你自己订单"取消"的那段代码里，照抄下面 cancel 接口里
-// "写退款流水 + 加钱包余额"这部分逻辑即可。
-router.post('/', requireUser, (req, res) => {
-  const { title, amount } = req.body;
-  if (!amount || amount <= 0) {
-    return res.status(400).json({ code: 400, message: 'amount 必须为正整数（单位：分）' });
-  }
-  const info = db.prepare(
-    'INSERT INTO orders (user_id, title, amount, status) VALUES (?, ?, ?, \'pending\')'
-  ).run(req.userId, title || '未命名订单', amount);
-  res.json({ code: 0, data: { orderId: info.lastInsertRowid } });
-});
-
-// 模拟支付成功（等真正接入微信支付后，这里应替换成微信支付回调 notify 接口，
-// 回调里做同样的事情：把订单状态改成 paid）
-router.post('/:id/pay', requireUser, (req, res) => {
-  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?')
-    .get(req.params.id, req.userId);
-  if (!order) return res.status(404).json({ code: 404, message: '订单不存在' });
-  if (order.status !== 'pending') {
-    return res.status(400).json({ code: 400, message: `订单当前状态是 ${order.status}，不能支付` });
-  }
-  db.prepare('UPDATE orders SET status = \'paid\', paid_at = datetime(\'now\',\'localtime\') WHERE id = ?')
-    .run(order.id);
-  res.json({ code: 0, message: '支付成功（模拟）' });
-});
-
-// 取消订单
-// - 如果订单还没支付（pending）：直接标记为已取消，不涉及金额
-// - 如果订单已支付（paid）：标记为 refunded，并把金额退回用户钱包，同时写一条钱包流水
-//   （这就是"取消支付后，资金退回"的实现：因为还没接微信支付，先退回到站内钱包/余额，
-//    等接入微信支付的退款接口后，可以在这里加一步调用微信退款 API，
-//    钱包这块可以保留作为"客服人工退款/补偿"的通道）
-router.post('/:id/cancel', requireUser, (req, res) => {
-  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?')
-    .get(req.params.id, req.userId);
-  if (!order) return res.status(404).json({ code: 404, message: '订单不存在' });
-  if (!['pending', 'paid'].includes(order.status)) {
-    return res.status(400).json({ code: 400, message: `订单当前状态是 ${order.status}，不能取消` });
-  }
-
-  const result = db.withTransaction(() => {
-    if (order.status === 'pending') {
-      db.prepare('UPDATE orders SET status = \'cancelled\', cancelled_at = datetime(\'now\',\'localtime\') WHERE id = ?')
-        .run(order.id);
-      return { refunded: false };
+router.post('/preview', requireUser, wrap((req, res) => {
+  const p = svc.priceOrder(req.userId, req.body);
+  const settings = svc.getSettings();
+  res.json({
+    code: 0,
+    data: {
+      items: p.lines.map(l => ({
+        food_id: l.food_id, name: l.name, image: l.image, count: l.count,
+        price: fenToYuan(l.unit_price), discount_price: fenToYuan(l.discount_price),
+        packing_fee: fenToYuan(l.packing_fee), delivery_fee: fenToYuan(l.delivery_fee)
+      })),
+      goods_amount: fenToYuan(p.goods),
+      product_discount: fenToYuan(p.productDiscount),
+      coupon_discount: fenToYuan(p.couponDiscount),
+      packing_fee: fenToYuan(p.packing),
+      delivery_fee: fenToYuan(p.delivery),
+      amount: fenToYuan(p.total),
+      free_delivery: p.freeDelivery,
+      min_order_amount: settings.min_order_amount,
+      free_delivery_threshold: settings.free_delivery_threshold
     }
-
-    // status === 'paid'，需要退款
-    const wallet = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(order.user_id);
-    const newBalance = wallet.balance + order.amount;
-
-    db.prepare('UPDATE wallets SET balance = ?, updated_at = datetime(\'now\',\'localtime\') WHERE user_id = ?')
-      .run(newBalance, order.user_id);
-
-    db.prepare(
-      `INSERT INTO wallet_transactions (user_id, type, amount, balance_after, order_id, remark)
-       VALUES (?, 'order_refund', ?, ?, ?, ?)`
-    ).run(order.user_id, order.amount, newBalance, order.id, `订单#${order.id}取消退款`);
-
-    db.prepare('UPDATE orders SET status = \'refunded\', cancelled_at = datetime(\'now\',\'localtime\') WHERE id = ?')
-      .run(order.id);
-
-    return { refunded: true, balance: newBalance };
   });
-  res.json({ code: 0, message: result.refunded ? '订单已取消，金额已退回钱包' : '订单已取消', data: result });
-});
+}));
 
-// 小程序端：查询自己的订单列表
-router.get('/', requireUser, (req, res) => {
-  const list = db.prepare('SELECT * FROM orders WHERE user_id = ? ORDER BY id DESC').all(req.userId);
-  res.json({ code: 0, data: list });
-});
+router.post('/', requireUser, wrap((req, res) => {
+  const order = svc.createOrder(req.userId, req.body || {});
+  res.json({ code: 0, message: '订单已创建', data: { orderId: order.id, order } });
+}));
+
+router.get('/', requireUser, wrap((req, res) => {
+  res.json({ code: 0, data: svc.listUserOrders(req.userId) });
+}));
+
+router.get('/:id', requireUser, wrap((req, res) => {
+  svc.cancelExpiredOrders();
+  const row = svc.getOwnedOrder(req.userId, req.params.id);
+  res.json({ code: 0, data: svc.orderView(row) });
+}));
+
+router.post('/:id/pay', requireUser, wrap((req, res) => {
+  const order = svc.payOrder(req.userId, req.params.id, (req.body || {}).payment_method);
+  res.json({ code: 0, message: '支付成功', data: order });
+}));
+
+router.post('/:id/cancel', requireUser, wrap((req, res) => {
+  const before = svc.getOwnedOrder(req.userId, req.params.id);
+  const wasPaid = before.status === 'paid';
+  const order = svc.userCancel(req.userId, req.params.id);
+  res.json({
+    code: 0,
+    message: wasPaid ? '订单已取消，金额已退回钱包' : '订单已取消',
+    data: { refunded: wasPaid, order }
+  });
+}));
+
+router.post('/:id/refund', requireUser, wrap((req, res) => {
+  const { reason, amount } = req.body || {};
+  const r = svc.applyRefund(req.userId, req.params.id, { reason, amount });
+  res.json({ code: 0, message: '退款申请已提交，等待商家审核', data: r });
+}));
+
+router.post('/:id/delete', requireUser, wrap((req, res) => {
+  svc.userDeleteOrder(req.userId, req.params.id);
+  res.json({ code: 0, message: '订单已删除' });
+}));
 
 module.exports = router;

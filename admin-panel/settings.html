@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>系统设置</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .set-grid { max-width: 760px; }
+  .switch-row:last-child { border-bottom: none; }
+  .switch-row .desc { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .set-foot { display: flex; gap: 10px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="app.js"></script>
+<script>
+Admin.init({ key: 'settings', title: '系统设置' }, async (body) => {
+  const { api, act, esc, yuan, confirmBox, formBox, toast } = Admin;
+  let cur = await api('/api/admin/settings');
+
+  body.innerHTML = `
+    <div class="set-grid">
+      <div class="card">
+        <h3>店铺信息</h3>
+        <form id="frm" class="form-grid">
+          <div class="form-row"><label>店名<i class="req">*</i></label><input name="store_name" maxlength="20"></div>
+          <div class="form-row"><label>联系电话</label><input name="contact_phone" maxlength="20"></div>
+          <div class="form-row full"><label>店铺地址</label><input name="store_address" maxlength="100"></div>
+          <div class="form-row"><label>开门时间</label><input name="open_time" type="time"></div>
+          <div class="form-row"><label>关门时间</label><input name="close_time" type="time"></div>
+          <div class="form-row"><label>起送价（元）</label><input name="min_order_amount" type="number" min="0" step="0.01"><div class="hint">商品优惠后金额低于它不能下单，0 为不限</div></div>
+          <div class="form-row"><label>免配送费门槛（元）</label><input name="free_delivery_threshold" type="number" min="0" step="0.01"><div class="hint">达到后免配送费，0 为不启用</div></div>
+          <div class="form-row"><label>待付款超时（分钟）</label><input name="order_timeout_minutes" type="number" min="5" max="1440" step="1"><div class="hint">5 ~ 1440，超时未付款自动取消</div></div>
+        </form>
+      </div>
+      <div class="card">
+        <h3>营业与支付开关</h3>
+        <div class="switch-row"><div><b>营业中</b><div class="desc">关闭后用户无法下单（提示“餐厅正在休息”）</div></div><label class="check"><input type="checkbox" id="sw_store_open"> 营业</label></div>
+        <div class="switch-row"><div><b>按营业时间限制下单</b><div class="desc">开启后，不在开门~关门时间内也不能下单</div></div><label class="check"><input type="checkbox" id="sw_enforce_business_hours"> 开启</label></div>
+        <div class="switch-row"><div><b>允许钱包余额支付</b><div class="desc">关闭后用户只能用微信支付</div></div><label class="check"><input type="checkbox" id="sw_wallet_pay_enabled"> 允许</label></div>
+      </div>
+      <div class="set-foot">
+        <button class="btn primary" id="save">保存设置</button>
+        <button class="btn ghost" id="reset">还原未保存的修改</button>
+      </div>
+      <div class="card" style="margin-top:24px">
+        <h3>账号安全</h3>
+        <div class="muted sm-text" style="margin-bottom:12px">当前登录账号：<b>${esc(Admin.getUsername() || '')}</b></div>
+        <button class="btn warn" id="pwd">修改管理员密码</button>
+      </div>
+    </div>`;
+
+  const frm = Admin.$('#frm');
+  const TEXT = ['store_name', 'contact_phone', 'store_address', 'open_time', 'close_time', 'min_order_amount', 'free_delivery_threshold', 'order_timeout_minutes'];
+  const FLAGS = ['store_open', 'enforce_business_hours', 'wallet_pay_enabled'];
+  const FLAG_TEXT = { store_open: '营业状态', enforce_business_hours: '按营业时间限制下单', wallet_pay_enabled: '钱包余额支付' };
+
+  function fill() {
+    TEXT.forEach((k) => { frm.elements[k].value = cur[k] === undefined || cur[k] === null ? '' : cur[k]; });
+    FLAGS.forEach((k) => { Admin.$('#sw_' + k).checked = !!cur[k]; });
+  }
+  fill();
+
+  function collect() {
+    const p = {};
+    TEXT.forEach((k) => { p[k] = frm.elements[k].value.trim(); });
+    FLAGS.forEach((k) => { p[k] = Admin.$('#sw_' + k).checked ? 1 : 0; });
+    return p;
+  }
+
+  Admin.$('#reset').addEventListener('click', fill);
+  Admin.$('#save').addEventListener('click', async () => {
+    const p = collect();
+    if (!p.store_name) { toast('店名不能为空', 'error'); return; }
+    if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(p.open_time) || !/^([01]?\d|2[0-3]):[0-5]\d$/.test(p.close_time)) { toast('请填写有效的开门/关门时间', 'error'); return; }
+    ['min_order_amount', 'free_delivery_threshold'].forEach((k) => { p[k] = p[k] === '' ? 0 : Number(p[k]); });
+    p.order_timeout_minutes = Number(p.order_timeout_minutes);
+    if (!(p.min_order_amount >= 0) || !(p.free_delivery_threshold >= 0)) { toast('起送价和免配送费门槛必须是不小于 0 的数字', 'error'); return; }
+    if (!(p.order_timeout_minutes >= 5 && p.order_timeout_minutes <= 1440)) { toast('待付款超时需在 5 ~ 1440 分钟之间', 'error'); return; }
+
+    const changed = [];
+    FLAGS.forEach((k) => { if ((cur[k] ? 1 : 0) !== p[k]) changed.push(`${FLAG_TEXT[k]}：${p[k] ? '开启' : '关闭'}`); });
+    const lines = changed.length ? `\n以下开关将改变：\n· ${changed.join('\n· ')}` : '';
+    const ok = await confirmBox({
+      title: '保存系统设置',
+      message: `确定保存设置吗？修改会立即对所有用户生效。${lines}`,
+      danger: p.store_open === 0 && !!cur.store_open, okText: '确认保存'
+    });
+    if (!ok) return;
+    try { cur = await act('/api/admin/settings', 'PUT', p, '设置已保存'); fill(); } catch (e) { /* act 已提示 */ }
+  });
+
+  Admin.$('#pwd').addEventListener('click', async () => {
+    const v = await formBox({
+      title: '修改管理员密码', width: 420, okText: '下一步：确认',
+      fields: [
+        { name: 'oldPassword', label: '原密码', type: 'password', required: true, full: true },
+        { name: 'newPassword', label: '新密码', type: 'password', required: true, full: true, hint: '至少 6 位' },
+        { name: 'again', label: '确认新密码', type: 'password', required: true, full: true }
+      ],
+      validate: (x) => (x.newPassword.length < 6 ? '新密码至少 6 位' : x.newPassword !== x.again ? '两次输入的新密码不一致' : '')
+    });
+    if (!v) return;
+    const ok = await confirmBox({ title: '确认修改密码', message: '确定修改管理员登录密码吗？修改后请用新密码登录。', okText: '确认修改' });
+    if (!ok) return;
+    try { await act('/api/auth/admin-change-password', 'POST', { oldPassword: v.oldPassword, newPassword: v.newPassword }, '密码已修改'); } catch (e) { /* 已提示 */ }
+  });
+});
+</script>
+</body>
+</html>

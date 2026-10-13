@@ -6,804 +6,218 @@
 <title>订单管理</title>
 <link rel="stylesheet" href="style.css">
 <style>
-.order-detail-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-}
-
-.order-detail-mask {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-}
-
-.order-detail-panel {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 760px;
-  max-width: 90%;
-  max-height: 85vh;
-  background: #fff;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-}
-
-.order-detail-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 24px;
-  border-bottom: 1px solid #eee;
-}
-
-.order-detail-header h2 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.order-detail-close {
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: #f3f3f3;
-  border-radius: 50%;
-  font-size: 24px;
-  cursor: pointer;
-}
-
-.order-detail-body {
-  padding: 24px;
-  max-height: calc(85vh - 80px);
-  overflow-y: auto;
-}
-
-.detail-section {
-  margin-bottom: 28px;
-}
-
-.detail-section h3 {
-  margin: 0 0 16px;
-  font-size: 17px;
-  color: #333;
-}
-
-.detail-row {
-  display: flex;
-  gap: 20px;
-  padding: 10px 0;
-  border-bottom: 1px solid #f1f1f1;
-  line-height: 1.6;
-}
-
-.detail-label {
-  width: 90px;
-  flex-shrink: 0;
-  color: #888;
-}
-
-.complaint-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  margin-left: 6px;
-  padding: 0 6px;
-  background: #f0f0f0;
-  border-radius: 12px;
-  font-size: 12px;
-}
-
-.complaint-detail-card {
-  padding: 16px;
-  margin-bottom: 16px;
-  background: #fafafa;
-  border: 1px solid #eee;
-  border-radius: 8px;
-}
-
-.complaint-content-row {
-  align-items: flex-start;
-}
-
-.complaint-images {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 16px 0;
-  padding-left: 110px;
-}
-
-.complaint-image {
-  width: 120px;
-  height: 120px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid #eee;
-  cursor: pointer;
-}
-
-.complaint-image:hover {
-  opacity: 0.85;
-}
-
-.detail-empty {
-  padding: 30px;
-  text-align: center;
-  color: #999;
-  background: #fafafa;
-  border-radius: 8px;
-}
+  .ord-items td { padding: 8px 10px; }
+  .ord-items { width: 100%; border-collapse: collapse; }
+  .ord-items th { text-align: left; font-size: 12px; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--line); }
+  .ord-items tr + tr td { border-top: 1px solid #f0f2f5; }
+  .ord-items .num { text-align: right; }
+  .old-price { text-decoration: line-through; color: var(--muted); font-size: 12px; margin-right: 4px; }
+  .refund-box { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 10px 14px; }
+  .detail-foot-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 </style>
 </head>
-
 <body>
-
-<div id="app">
-
-  <!-- 登录框 -->
-  <div id="loginBox" class="login-box">
-    <h2>管理后台登录</h2>
-
-    <input
-      id="loginUsername"
-      placeholder="用户名"
-      value="admin"
-    >
-    
-    <input
-      id="loginPassword"
-      placeholder="密码"
-      type="password"
-    >
-    
-    <button onclick="doLogin()">登录</button>
-    
-    <p id="loginMsg" class="msg"></p>
-  </div>
-
-
-  <!-- 登录后的主界面 -->
-  <div id="mainBox" style="display:none;">
-
-    <header>
-      <h1>小程序运营后台</h1>
-    
-      <div>
-        <span id="whoami"></span>
-        <button class="ghost" onclick="logout()">退出登录</button>
-      </div>
-    </header>
-
-
-<!-- =========================
-     左侧菜单
-========================== -->
-<nav>
-
-  <a href="index.html">
-    📊 数据统计
-  </a>
-
-  <a href="foods.html">
-    🍜 菜品管理
-  </a>
-
-  <a href="categories.html">
-    📂 分类管理
-  </a>
-
-  <a href="orders.html" class="active">
-    📦 订单管理
-  </a>
-
-  <a href="users.html">
-    👥 用户管理
-  </a>
-
-  <a href="messages.html">
-    💬 留言管理
-  </a>
-
-  <a href="polls.html">
-    🗳️ 投票管理
-  </a>
-
-  <a href="notices.html">
-    📢 公告管理
-  </a>
-
-  <a href="comments.html">
-    ⭐ 评论管理
-  </a>
-
-  <a href="coupons.html">
-    🎫 优惠券管理
-  </a>
-
-  <a href="delivery.html">
-    🚚 配送地址/区域
-  </a>
-
-  <a href="wallet.html">
-    💰 钱包管理
-  </a>
-
-  <a href="refunds.html">
-    💸 退款审核
-  </a>
-
-  <a href="complaints.html">
-    📢 投诉管理
-  </a>
-
-  <a href="settings.html">
-    ⚙️ 系统设置
-  </a>
-
-</nav>
-
-
-    <main>
-    
-      <h2>订单管理</h2>
-    
-      <div class="section">
-    
-        <h3>全部订单</h3>
-
-<div style="margin-bottom:15px;"> 
-  <button onclick="loadOrders()">刷新订单</button> 
-</div>
-
-<div class="form-row" style="margin-bottom: 16px;">
-  <label>订单状态</label>
-
-  <select id="orderStatusFilter" onchange="loadOrders()">
-    <option value="">全部订单</option>
-    <option value="pending">待付款</option>
-    <option value="paid">待接单</option>
-    <option value="accepted">商家已接单</option>
-    <option value="cooking">制作中</option>
-    <option value="delivery">配送中</option>
-    <option value="ready">待取餐</option>
-    <option value="completed">已完成</option>
-    <option value="cancelled">已取消</option>
-    <option value="refunded">已退款</option>
-  </select>
-</div>
-
-<div class="form-row" style="margin-bottom: 16px;">
-  <label>搜索订单</label>
-
-  <input
-    type="text"
-    id="orderSearch"
-    placeholder="请输入订单号或用户昵称"
-    style="width: 260px;"
-  >
-
-  <button onclick="loadOrders()">搜索</button>
-</div>
-
-<div style="overflow-x:auto;">
-
-          <table>
-    
-            <thead>
-              <tr>
-                <th>订单号</th>
-                <th>用户</th>
-                <th>商品</th>
-                <th>金额</th>
-                <th>状态</th>
-                <th>创建时间</th>
-                <th>支付时间</th>
-    	<th>操作</th>
-              </tr>
-            </thead>
-    
-            <tbody id="orderList">
-    
-              <tr>
-                <td colspan="8">
-                  正在加载订单...
-                </td>
-              </tr>
-    
-            </tbody>
-    
-          </table>
-    
-        </div>
-    
-      </div>
-    
-    </main>
-
-  </div>
-
-</div>
-
-
+<div id="app"></div>
 <script src="app.js"></script>
-
 <script>
-
-function statusText(status) {
-
-  const map = {
-    pending: '待付款',
-    paid: '待接单',
-    accepted: '商家已接单',
-    cooking: '制作中',
-    delivery: '配送中',
-    ready: '待取餐',
-    completed: '已完成',
-    cancelled: '已取消',
-    refunded: '已退款'
-  };
-
-  return map[status] || status || '-';
-
-}
-
-
-function statusClass(status) {
-
-  const map = {
-    pending: 'pending',
-    paid: 'processing',
-    accepted: 'processing',
-    cooking: 'processing',
-    delivery: 'processing',
-    ready: 'processing',
-    completed: 'completed',
-    cancelled: 'rejected',
-    refunded: 'completed'
-  };
-
-  return map[status] || 'pending';
-
-}
-
-
-async function acceptOrder(orderId) {
-
-  if (!confirm(`确定要接收订单 #${orderId} 吗？`)) {
-    return;
-  }
-
-  try {
-
-    await api(`/api/admin/orders/${orderId}/accept`, {
-      method: 'POST'
-    });
-    
-    alert('接单成功');
-    
-    await loadOrders();
-
-  } catch (error) {
-
-    console.error('接单失败：', error);
-    
-    alert(error.message || '接单失败，请查看控制台');
-
-  }
-
-}
-
-
-async function startCooking(orderId) {
-
-  if (!confirm(`确定要开始制作订单 #${orderId} 吗？`)) {
-    return;
-  }
-
-  try {
-
-    await api(`/api/admin/orders/${orderId}/cooking`, {
-      method: 'POST'
-    });
-    
-    alert('已开始制作');
-    
-    await loadOrders();
-
-  } catch (error) {
-
-    console.error('开始制作失败：', error);
-    
-    alert(error.message || '开始制作失败，请查看控制台');
-
-  }
-
-}
-
-
-
-async function startDelivery(orderId) {
-
-  if (!confirm(`确定要让订单 #${orderId} 进入配送吗？`)) {
-    return;
-  }
-
-  try {
-
-    await api(`/api/admin/orders/${orderId}/delivery`, {
-      method: 'POST'
-    });
-    
-    alert('订单已进入配送');
-    
-    await loadOrders();
-
-  } catch (error) {
-
-    console.error('进入配送失败：', error);
-    
-    alert(error.message || '进入配送失败，请查看控制台');
-
-  }
-
-}
-
-
-
-async function completeOrder(orderId) {
-
-  if (!confirm(`确定要完成订单 #${orderId} 吗？`)) {
-    return;
-  }
-
-  try {
-
-    await api(`/api/admin/orders/${orderId}/complete`, {
-      method: 'POST'
-    });
-    
-    alert('订单已完成');
-    
-    await loadOrders();
-
-  } catch (error) {
-
-    console.error('完成订单失败：', error);
-    
-    alert(error.message || '完成订单失败，请查看控制台');
-
-  }
-
-}
-
-// =========================
-// 查看订单详情
-// =========================
-
-async function viewOrderDetail(orderId) {
-  try {
-    const data = await api(
-      `/api/admin/orders/${orderId}/detail`
-    );
-
-    console.log('订单详情：', data);
-    
-    const order = data.order || {};
-    const complaints = data.complaints || [];
-
-const statusText = {
-  pending: '待付款',
-  paid: '待接单',
-  accepted: '商家已接单',
-  cooking: '制作中',
-  delivery: '配送中',
-  ready: '待取餐',
-  completed: '已完成',
-  cancelled: '已取消',
-  refunded: '已退款'
-};
-
-    let complaintHtml = '';
-    
-    if (complaints.length === 0) {
-      complaintHtml = `
-        <div class="detail-empty">
-          该订单暂无投诉记录
-        </div>
-      `;
-    } else {
-      complaintHtml = complaints.map(complaint => {
-    
-        let imagesHtml = '';
-    
-        if (complaint.images && complaint.images.length > 0) {
-          imagesHtml = `
-            <div class="complaint-images">
-              ${complaint.images.map(image => `
-                <img
-                  src="${image}"
-                  class="complaint-image"
-                  onclick="window.open('${image}', '_blank')"
-                >
-              `).join('')}
-            </div>
-          `;
-        }
-    
-        return `
-          <div class="complaint-detail-card">
-    
-            <div class="detail-row">
-              <span class="detail-label">投诉类型</span>
-              <span>${complaint.type || '-'}</span>
-            </div>
-    
-            <div class="detail-row complaint-content-row">
-              <span class="detail-label">投诉内容</span>
-              <span>${complaint.content || '-'}</span>
-            </div>
-    
-            ${imagesHtml}
-    
-            <div class="detail-row">
-              <span class="detail-label">处理状态</span>
-              <span>${complaint.status || '-'}</span>
-            </div>
-    
-            <div class="detail-row">
-              <span class="detail-label">处理人</span>
-              <span>${complaint.handler || '-'}</span>
-            </div>
-    
-            <div class="detail-row">
-              <span class="detail-label">处理备注</span>
-              <span>${complaint.handle_remark || '-'}</span>
-            </div>
-    
-            <div class="detail-row">
-              <span class="detail-label">投诉时间</span>
-              <span>${complaint.created_at || '-'}</span>
-            </div>
-    
-          </div>
-        `;
-      }).join('');
-    }
-    
-    const modal = document.createElement('div');
-    
-    modal.className = 'order-detail-modal';
-    
-    modal.innerHTML = `
-      <div class="order-detail-mask"></div>
-    
-      <div class="order-detail-panel">
-    
-        <div class="order-detail-header">
-          <h2>订单详情</h2>
-          <button
-            class="order-detail-close"
-            onclick="this.closest('.order-detail-modal').remove()"
-          >
-            ×
-          </button>
-        </div>
-    
-        <div class="order-detail-body">
-    
-          <div class="detail-section">
-            <h3>订单信息</h3>
-    
-            <div class="detail-row">
-              <span class="detail-label">订单号</span>
-              <span>#${order.id || orderId}</span>
-            </div>
-    
-            <div class="detail-row">
-              <span class="detail-label">用户昵称</span>
-              <span>${order.nickname || '-'}</span>
-            </div>
-    
-            <div class="detail-row">
-              <span class="detail-label">用户账号</span>
-              <span>${order.dev_account || '-'}</span>
-            </div>
-    
-            <div class="detail-row">
-              <span class="detail-label">商品</span>
-              <span>${order.title || '-'}</span>
-            </div>
-    
-            <div class="detail-row">
-              <span class="detail-label">订单金额</span>
-              <span>
-                ¥${order.amount
-                  ? (Number(order.amount) / 100).toFixed(2)
-                  : '0.00'}
-              </span>
-            </div>
-    
-            <div class="detail-row">
-              <span class="detail-label">订单状态</span>
-              <span>${statusText[order.status] || order.status || '-'}</span>
-            </div>
-    
-            <div class="detail-row">
-              <span class="detail-label">创建时间</span>
-              <span>${order.created_at || '-'}</span>
-            </div>
-    
-        <div class="detail-row">
-    	<span class="detail-label">支付时间</span>
-    	<span>${order.paid_at || '-'}</span>
-        </div>
-    
-        <div class="detail-row">
-    	<span class="detail-label">取消时间</span>
-    	<span>${order.cancelled_at || '-'}</span>
-        </div>
-    
-          </div>
-    
-          <div class="detail-section">
-    
-            <h3>
-              投诉记录
-              <span class="complaint-count">
-                ${complaints.length}
-              </span>
-            </h3>
-    
-            ${complaintHtml}
-    
-          </div>
-    
-        </div>
-    
-      </div>
-    `;
-    
-    document.body.appendChild(modal);
-
-  } catch (error) {
-
-    console.error('订单详情加载失败：', error);
-    
-    alert(
-      error.message || '订单详情加载失败，请查看控制台'
-    );
-  }
-}
-
-
-
-async function loadOrders() {
-
-  const tbody = document.getElementById('orderList');
-
-  const statusFilter = document.getElementById('orderStatusFilter')?.value || '';
-
-  const keyword = document.getElementById('orderSearch')?.value.trim() || '';
-
-  tbody.innerHTML = `
-    <tr>
-      <td colspan="8">正在加载订单...</td>
-    </tr>
-  `;
-  try {const params = new URLSearchParams();
-
-if (statusFilter) {
-  params.set('status', statusFilter);
-}
-
-if (keyword) {
-  params.set('keyword', keyword);
-}
-
-const query = params.toString();
-const url = query
-  ? `/api/admin/orders?${query}`
-  : '/api/admin/orders';
-
-const orders = await api(url);
-
-    if (!orders || orders.length === 0) {
-    
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="8">目前还没有订单</td>
-        </tr>
-      `;
-    
-      return;
-    
-    }
-
-
-    tbody.innerHTML = orders.map(order => {
-    
-      return `
-        <tr>
-    
-          <td>#${order.id}</td>
-    
-          <td>
-            ${order.nickname || '未知用户'}
-          </td>
-    
-          <td>
-            ${order.title || '-'}
-          </td>
-    
-          <td>
-            ¥${fenToYuan(order.amount)}
-          </td>
-    
-          <td>
-            <span class="badge ${statusClass(order.status)}">
-              ${statusText(order.status)}
-            </span>
-          </td>
-    
-          <td>
-            ${order.created_at || '-'}
-          </td>
-    
-                    <td>
-            ${order.paid_at || '-'}
-          </td>
-
-<td>
-  <button
-    class="gray"
-    onclick="viewOrderDetail(${order.id})"
-  >
-    订单详情
-  </button>
-
-  ${
-    order.status === 'paid'
-      ? `<button onclick="acceptOrder(${order.id})">接单</button>`
-      : order.status === 'accepted'
-        ? `<button onclick="startCooking(${order.id})">开始制作</button>`
-        : order.status === 'cooking'
-          ? `<button onclick="startDelivery(${order.id})">进入配送</button>`
-          : order.status === 'delivery'
-            ? `<button onclick="completeOrder(${order.id})">完成订单</button>`
-            : ''
-  }
-</td>
-
-        </tr>
-      `;
-    
+Admin.init({ key: 'orders', title: '订单管理' }, async (body, ctx) => {
+  const { esc, yuan, num, badge, $, $$ } = Admin;
+  const qs = new URLSearchParams(location.search);
+  const state = { status: qs.get('status') || '', refund: qs.get('refund') || '', keyword: '', type: '', page: 1, pageSize: 15, rows: [], counts: {} };
+
+  const TABS = [
+    ['', '全部', 'all'], ['pending', '待付款', 'pending'], ['paid', '待接单', 'paid'], ['accepted', '已接单', 'accepted'],
+    ['cooking', '制作中', 'cooking'], ['delivery', '配送中', 'delivery'], ['ready', '待取餐', 'ready'],
+    ['completed', '已完成', 'completed'], ['cancelled', '已取消', 'cancelled'], ['refunded', '已退款', 'refunded']
+  ];
+  const REFUND_TEXT = { pending: '退款审核中', partial: '部分退款', refunded: '已退款', rejected: '退款被驳回' };
+
+  ctx.setActions('<button class="btn ghost" id="reloadBtn">刷新</button>');
+  body.innerHTML = `
+    <div class="tabs" id="tabs"></div>
+    <div class="toolbar">
+      <input type="text" id="kw" placeholder="搜索 订单号 / 用户昵称 / 手机号 / 商品 / 地址">
+      <select id="fType"><option value="">全部配送方式</option><option value="delivery">配送到家</option><option value="pickup">到店自取</option></select>
+      <label class="check"><input type="checkbox" id="fRefund"> 只看待审核退款</label>
+      <button class="btn ghost" id="resetBtn">重置</button>
+    </div>
+    <div class="table-wrap"><table class="tbl"><thead><tr>
+      <th>订单号</th><th>用户</th><th>商品</th><th>方式</th><th class="num">实付</th><th>状态</th><th>下单时间</th><th>操作</th>
+    </tr></thead><tbody id="tb"></tbody></table></div>
+    <div id="pager"></div>`;
+  $('#fRefund').checked = state.refund === 'pending';
+
+  function renderTabs() {
+    const c = state.counts;
+    $('#tabs').innerHTML = TABS.map(([v, t, k]) => {
+      const n = c[k];
+      return `<button class="tab ${!state.refund && state.status === v ? 'active' : ''}" data-s="${v}">${t}${n !== undefined ? `<span class="cnt">${n}</span>` : ''}</button>`;
     }).join('');
-
-  } catch (error) {
-
-    console.error('订单加载失败：', error);
-    
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="8">
-          订单加载失败，请查看控制台
-        </td>
-      </tr>
-    `;
-
   }
 
-}
+  // 按状态给出商家可点的流转按钮
+  function flowButtons(o) {
+    if (o.refund_status === 'pending') return [];
+    const out = [];
+    if (o.status === 'paid') out.push({ a: 'accept', t: '接单', c: 'primary' });
+    if (o.status === 'accepted') out.push({ a: 'cooking', t: '开始制作', c: 'primary' });
+    if (o.status === 'cooking') out.push(o.delivery_type === 'pickup' ? { a: 'ready', t: '可取餐', c: 'primary' } : { a: 'delivery', t: '开始配送', c: 'primary' });
+    if (o.status === 'delivery' || o.status === 'ready') out.push({ a: 'complete', t: '完成订单', c: 'primary' });
+    return out;
+  }
+  const canCancel = (o) => ['pending', 'paid', 'accepted', 'cooking'].includes(o.status);
+  const canDelete = (o) => o.status === 'cancelled' && o.payment_status === 'unpaid';
+  const userName = (o) => (o.user && (o.user.nickname || o.user.dev_account)) || '未知用户';
 
+  function statusBadge(o) {
+    let h = badge(o.status_text, Admin.ORDER_COLORS[o.status] || 'gray');
+    if (REFUND_TEXT[o.refund_status] && o.status !== 'refunded') h += ' ' + badge(REFUND_TEXT[o.refund_status], o.refund_status === 'pending' ? 'red' : 'orange');
+    return h;
+  }
 
-initPage(loadOrders);
+  async function load() {
+    const json = await Admin.api('/api/admin/orders', { raw: true, query: {
+      status: state.refund ? '' : state.status, refund: state.refund, keyword: state.keyword, delivery_type: state.type,
+      page: state.page, pageSize: state.pageSize } });
+    state.rows = json.data; state.counts = json.counts || {};
+    state.counts.refund_pending = state.counts.refund_pending || 0;
+    renderTabs();
+    $('#tb').innerHTML = json.data.map(o => `<tr>
+      <td><div class="mono">${esc(o.order_no || '#' + o.id)}</div><div class="muted sm-text">#${o.id}</div></td>
+      <td>${esc(userName(o))}<div class="muted sm-text">${esc((o.user && o.user.phone) || '')}</div></td>
+      <td><div class="ellipsis" title="${esc(o.title)}">${esc(o.title)}</div><div class="muted sm-text">共 ${num(o.item_count)} 件</div></td>
+      <td>${esc(o.delivery_type_text)}</td>
+      <td class="num"><b>${yuan(o.amount)}</b><div class="muted sm-text">${esc(o.payment_method_text || '')}</div></td>
+      <td>${statusBadge(o)}</td>
+      <td class="muted sm">${esc(o.created_at)}</td>
+      <td><div class="row-actions">
+        <button class="btn sm ghost" data-a="detail" data-id="${o.id}">详情</button>
+        ${flowButtons(o).map(b => `<button class="btn sm ${b.c}" data-a="${b.a}" data-id="${o.id}">${b.t}</button>`).join('')}
+        ${canCancel(o) ? `<button class="btn sm ghost" style="color:var(--red)" data-a="cancel" data-id="${o.id}">取消</button>` : ''}
+        ${canDelete(o) ? `<button class="btn sm ghost" style="color:var(--red)" data-a="del" data-id="${o.id}">删除</button>` : ''}
+      </div></td></tr>`).join('') || '<tr><td colspan="8" class="empty-state">没有符合条件的订单</td></tr>';
+    Admin.renderPager($('#pager'), { page: json.page, pageSize: json.pageSize, total: json.total }, (p) => { state.page = p; load(); });
+    $('#fRefund').parentNode.lastChild.textContent = ` 只看待审核退款${state.counts.refund_pending ? `（${state.counts.refund_pending}）` : ''}`;
+    ctx.refreshBadges && ctx.refreshBadges();
+  }
 
+  // ---------- 操作（全部先确认） ----------
+  const FLOW_TEXT = {
+    accept: ['接单', '确定接下这个订单吗？'],
+    cooking: ['开始制作', '确定开始制作吗？'],
+    ready: ['可取餐', '餐品已备好，通知用户到店取餐吗？'],
+    delivery: ['开始配送', '确定开始配送吗？'],
+    complete: ['完成订单', '确认订单已送达/已取走，标记为完成吗？']
+  };
+  async function flow(o, a) {
+    const [t, msg] = FLOW_TEXT[a];
+    if (!await Admin.confirmBox({ title: t, okText: '确认' + t, message: `订单 ${o.order_no || '#' + o.id}\n${msg}` })) return false;
+    await Admin.act(`/api/admin/orders/${o.id}/${a}`, 'POST');
+    return true;
+  }
+  async function cancel(o) {
+    const hint = o.payment_status === 'paid' ? `订单已付款 ${yuan(o.amount)}，取消后将自动退回用户钱包。` : '订单尚未付款，取消后不会产生资金变动。';
+    const v = await Admin.formBox({
+      title: '取消订单 ' + (o.order_no || '#' + o.id), okText: '确认取消订单', danger: true, width: 440,
+      fields: [{ name: 'reason', label: '取消原因（会展示给用户）', type: 'textarea', required: true, full: true, maxlength: 100, placeholder: '如：菜品售罄 / 超出配送范围', hint }],
+      submit: async (val) => { await Admin.act(`/api/admin/orders/${o.id}/cancel`, 'POST', { reason: val.reason }); }
+    });
+    return !!v;
+  }
+  async function del(o) {
+    if (!await Admin.confirmBox({ title: '删除订单', danger: true, okText: '确认删除', message: `确定删除订单 ${o.order_no || '#' + o.id} 吗？此操作不可恢复。` })) return false;
+    await Admin.act('/api/admin/orders/' + o.id, 'DELETE');
+    return true;
+  }
+  async function act(a, o) {
+    try {
+      let ok;
+      if (FLOW_TEXT[a]) ok = await flow(o, a);
+      else if (a === 'cancel') ok = await cancel(o);
+      else if (a === 'del') ok = await del(o);
+      return ok;
+    } catch (e) { return false; }
+  }
+
+  // ---------- 详情 ----------
+  async function showDetail(id) {
+    const d = await Admin.api(`/api/admin/orders/${id}/detail`);
+    const o = d.order, complaints = d.complaints || [], wallet = d.wallet || [];
+    const addr = o.address;
+    const tl = [
+      ['下单', o.created_at], ['支付', o.paid_at], ['商家接单', o.accepted_at], ['开始制作', o.cooking_at],
+      o.delivery_type === 'pickup' ? ['可取餐', o.ready_at] : ['开始配送', o.delivery_at],
+      ['完成', o.completed_at], ['取消', o.cancelled_at], ['退款', o.refunded_at]
+    ].filter(x => x[1]);
+    const line = (l, v, cls) => `<div class="${cls || ''}"><span>${l}</span><span>${v}</span></div>`;
+    const html = `
+      <div class="detail-section"><dl class="kv">
+        <dt>订单号</dt><dd class="mono">${esc(o.order_no)} <span class="muted">(#${o.id})</span></dd>
+        <dt>状态</dt><dd>${statusBadge(o)}</dd>
+        <dt>用户</dt><dd>${esc(userName(o))}${o.user && o.user.phone ? ' · ' + esc(o.user.phone) : ''}</dd>
+        <dt>配送方式</dt><dd>${esc(o.delivery_type_text)}</dd>
+        <dt>支付方式</dt><dd>${esc(o.payment_method_text || '-')} · ${esc(o.payment_status_text || '')}</dd>
+        ${addr ? `<dt>收货信息</dt><dd>${esc(addr.name)} ${esc(addr.phone)}<br>${esc(addr.full || (addr.area_name || '') + (addr.detail || ''))}</dd>` : ''}
+        <dt>用户备注</dt><dd>${esc(o.remark) || '<span class="muted">无</span>'}</dd>
+        ${o.cancel_reason ? `<dt>取消原因</dt><dd>${esc(o.cancel_reason)}</dd>` : ''}
+      </dl></div>
+      <div class="detail-section"><h4>商品明细</h4>
+        <table class="ord-items"><thead><tr><th>商品</th><th class="num">单价</th><th class="num">数量</th><th class="num">打包费</th><th class="num">配送费</th><th class="num">小计</th></tr></thead><tbody>
+        ${o.items.map(i => `<tr><td><div class="cell-food">${i.image ? `<img class="thumb" src="${esc(i.image)}" alt="">` : '<div class="thumb"></div>'}<span>${esc(i.name)}</span></div></td>
+          <td class="num">${i.discount_price < i.price ? `<span class="old-price">${yuan(i.price)}</span>` : ''}${yuan(i.discount_price)}</td>
+          <td class="num">×${i.count}</td><td class="num">${yuan(i.packing_fee * i.count)}</td><td class="num">${yuan(i.delivery_fee * i.count)}</td><td class="num">${yuan(i.subtotal)}</td></tr>`).join('')}
+        </tbody></table></div>
+      <div class="detail-section"><h4>价格明细</h4><div class="price-lines">
+        ${line('商品金额', yuan(o.goods_amount))}
+        ${line('商品优惠', '-' + yuan(o.product_discount), 'minus')}
+        ${line('优惠券' + (o.coupon ? `（${esc(o.coupon.name)}）` : ''), '-' + yuan(o.coupon_discount), 'minus')}
+        ${line('打包费', '+' + yuan(o.packing_fee))}
+        ${line('配送费', '+' + yuan(o.delivery_fee))}
+        ${line('实付', yuan(o.amount), 'total')}
+        ${o.refunded_amount > 0 ? line('已退款', yuan(o.refunded_amount), 'minus') : ''}
+      </div></div>
+      ${o.refund ? `<div class="detail-section"><h4>退款信息</h4><div class="refund-box"><dl class="kv">
+        <dt>状态</dt><dd>${esc({ pending_review: '待审核', completed: '已退款', rejected: '已驳回' }[o.refund.status] || o.refund.status)}</dd>
+        <dt>金额</dt><dd>${yuan(o.refund.amount)}</dd><dt>原因</dt><dd>${esc(o.refund.reason) || '-'}</dd>
+        ${o.refund.review_remark ? `<dt>审核备注</dt><dd>${esc(o.refund.review_remark)}${o.refund.reviewer ? '（' + esc(o.refund.reviewer) + '）' : ''}</dd>` : ''}
+        <dt>申请时间</dt><dd>${esc(o.refund.created_at)}</dd>${o.refund.completed_at ? `<dt>完成时间</dt><dd>${esc(o.refund.completed_at)}</dd>` : ''}
+      </dl>${o.refund.status === 'pending_review' ? '<div style="margin-top:8px"><a href="refunds.html">前往「退款审核」处理 →</a></div>' : ''}</div></div>` : ''}
+      <div class="detail-section"><h4>订单进度</h4><ul class="timeline">${tl.map(([t, v]) => `<li class="done">${t}<span class="t">${esc(v)}</span></li>`).join('')}</ul></div>
+      ${wallet.length ? `<div class="detail-section"><h4>钱包流水</h4>${wallet.map(w => `<div class="sm-text" style="padding:3px 0">${esc(w.created_at)} · ${esc(w.remark || w.type)} · <b>${w.amount > 0 ? '+' : ''}${yuan(w.amount)}</b></div>`).join('')}</div>` : ''}
+      <div class="detail-section"><h4>投诉记录（${complaints.length}）</h4>${complaints.map(c => `<div class="card" style="padding:10px 14px;margin-bottom:8px">
+        <div>${badge(c.status, 'gray')} <b>${esc(c.type || '')}</b> <span class="muted sm-text">${esc(c.created_at)}</span></div><div class="pre">${esc(c.content)}</div>
+        ${(c.images || []).length ? `<div class="img-row" style="margin-top:6px">${c.images.map(u => `<img src="${esc(u)}" onclick="window.open(this.src)">`).join('')}</div>` : ''}
+        ${c.handle_remark ? `<div class="muted sm-text">处理备注：${esc(c.handle_remark)}</div>` : ''}</div>`).join('') || '<div class="muted">无</div>'}</div>`;
+
+    const buttons = [];
+    if (canDelete(o)) buttons.push({ text: '删除订单', type: 'danger', keepOpen: true, onClick: async (api) => { if (await act('del', o)) { api.close(); load(); } return false; } });
+    if (canCancel(o)) buttons.push({ text: '取消订单', type: 'warn', keepOpen: true, onClick: async (api) => { if (await act('cancel', o)) { api.close(); load(); } return false; } });
+    flowButtons(o).forEach(b => buttons.push({ text: b.t, type: 'primary', keepOpen: true, onClick: async (api) => { if (await act(b.a, o)) { api.close(); load(); } return false; } }));
+    buttons.push({ text: '关闭', type: 'ghost' });
+    if (o.refund_status === 'pending') buttons.unshift({ text: '有待审核退款，请先处理', type: 'ghost', keepOpen: true, onClick: () => false });
+    Admin.modal({ title: '订单详情', width: 760, body: html, buttons });
+  }
+
+  // ---------- 事件 ----------
+  body.addEventListener('click', async (e) => {
+    const t = e.target.closest('.tab');
+    if (t) { state.status = t.dataset.s; state.refund = ''; $('#fRefund').checked = false; state.page = 1; return load(); }
+    const b = e.target.closest('button[data-a]');
+    if (!b) return;
+    const o = state.rows.find(x => x.id === Number(b.dataset.id));
+    if (!o) return;
+    try {
+      if (b.dataset.a === 'detail') return await showDetail(o.id);
+    } catch (err) { return; }
+    if (await act(b.dataset.a, o)) await load();
+  });
+  $('#kw').addEventListener('input', Admin.debounce((e) => { state.keyword = e.target.value.trim(); state.page = 1; load(); }, 350));
+  $('#fType').onchange = (e) => { state.type = e.target.value; state.page = 1; load(); };
+  $('#fRefund').onchange = (e) => { state.refund = e.target.checked ? 'pending' : ''; state.page = 1; load(); };
+  $('#resetBtn').onclick = () => { Object.assign(state, { status: '', refund: '', keyword: '', type: '', page: 1 }); $('#kw').value = ''; $('#fType').value = ''; $('#fRefund').checked = false; load(); };
+  $('#reloadBtn').onclick = () => load();
+  await load();
+});
 </script>
-
 </body>
 </html>

@@ -8,7 +8,7 @@ const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
 const bcrypt = require('bcryptjs');
 
-const dbPath = path.join(__dirname, 'data.sqlite');
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'data.sqlite');
 const db = new DatabaseSync(dbPath);
 
 db.exec('PRAGMA journal_mode = WAL;'); // 提升并发读写性能
@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS orders (
   amount INTEGER NOT NULL,      -- 单位：分
   status TEXT NOT NULL DEFAULT 'pending', -- pending(待支付) / paid(已支付) / cancelled(已取消，未曾支付) / refunded(已支付后取消并退款) / completed(已完成)
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  detail_json TEXT,
   paid_at TEXT,
   cancelled_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id)
@@ -149,19 +150,157 @@ CREATE TABLE IF NOT EXISTS food_categories (
 -- 菜品表
 -- =========================
 CREATE TABLE IF NOT EXISTS foods (
+
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+  -- 分类
   category_id INTEGER,
+
+
+  -- 基础信息
   name TEXT NOT NULL,
+
   price INTEGER NOT NULL DEFAULT 0,
+
   image TEXT,
+
   description TEXT,
+
+
+  -- 商品详情
+  ingredients TEXT DEFAULT '',
+
+  taste TEXT DEFAULT '',
+
+  weight TEXT DEFAULT '',
+
+  allergen TEXT DEFAULT '',
+
+  notice TEXT DEFAULT '',
+
+
+  -- 费用
+  packing_fee INTEGER DEFAULT 0,
+
+  delivery_fee INTEGER DEFAULT 0,
+
+
+  -- 优惠
+  discount_enabled INTEGER DEFAULT 0,
+
+  discount REAL DEFAULT 10,
+
+
+  -- 销量
+  sales INTEGER DEFAULT 0,
+
+
+  -- 状态
   status TEXT NOT NULL DEFAULT 'on_sale',
+
   sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  FOREIGN KEY (category_id) REFERENCES food_categories(id)
+
+
+  created_at TEXT NOT NULL 
+    DEFAULT (datetime('now','localtime')),
+
+  updated_at TEXT NOT NULL 
+    DEFAULT (datetime('now','localtime')),
+
+
+  FOREIGN KEY(category_id)
+  REFERENCES food_categories(id)
+
 );
 `);
+
+// =========================
+// foods 表字段升级
+// =========================
+
+function addFoodColumn(column, type){
+
+  try{
+
+    db.prepare(`
+      ALTER TABLE foods
+      ADD COLUMN ${column} ${type}
+    `).run()
+
+    console.log(
+      `foods新增字段:${column}`
+    )
+
+  }catch(e){
+
+    // 已存在字段，忽略
+  }
+
+}
+
+
+// 商品详情
+
+addFoodColumn(
+  'ingredients',
+  "TEXT DEFAULT ''"
+)
+
+addFoodColumn(
+  'taste',
+  "TEXT DEFAULT ''"
+)
+
+addFoodColumn(
+  'weight',
+  "TEXT DEFAULT ''"
+)
+
+addFoodColumn(
+  'allergen',
+  "TEXT DEFAULT ''"
+)
+
+addFoodColumn(
+  'notice',
+  "TEXT DEFAULT ''"
+)
+
+
+// 费用
+
+addFoodColumn(
+  'packing_fee',
+  "INTEGER DEFAULT 0"
+)
+
+
+addFoodColumn(
+  'delivery_fee',
+  "INTEGER DEFAULT 0"
+)
+
+
+// 优惠
+
+addFoodColumn(
+  'discount_enabled',
+  "INTEGER DEFAULT 0"
+)
+
+
+addFoodColumn(
+  'discount',
+  "REAL DEFAULT 10"
+)
+
+
+// 销量
+
+addFoodColumn(
+  'sales',
+  "INTEGER DEFAULT 0"
+)
 
 // =========================
 // 食客留言表
@@ -261,5 +400,24 @@ try {
   console.error('优惠券模板数据库升级失败：', error);
 }
 
+try {
+  db.prepare(`
+    ALTER TABLE orders
+    ADD COLUMN detail_json TEXT
+  `).run()
+
+  console.log('orders.detail_json 字段添加成功')
+} catch (error) {
+  if (!String(error.message).includes('duplicate column name')) {
+    console.error('添加 orders.detail_json 失败：', error)
+  }
+}
+
+// 升级表结构 / 迁移旧数据（幂等）
+const migrate = require('./migrate');
+migrate(db);
+
 module.exports = db;
 module.exports.withTransaction = withTransaction;
+module.exports.getSetting = (key) => migrate.getSetting(db, key);
+module.exports.setSetting = (key, value) => migrate.setSetting(db, key, value);
